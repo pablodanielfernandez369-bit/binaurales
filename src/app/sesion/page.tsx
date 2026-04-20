@@ -13,7 +13,7 @@ export default function SessionPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false); // New state
   const [timeLeft, setTimeLeft] = useState(0);
-  const [noiseVolume, setNoiseVolume] = useState(0.5);
+  const [noiseVolume, setNoiseVolume] = useState(0.05); // Default 5%
   const [completed, setCompleted] = useState(false);
   const router = useRouter();
 
@@ -97,11 +97,16 @@ export default function SessionPage() {
     noiseSource.buffer = buffer;
     noiseSource.loop = true;
 
+    // Brown noise: apply low-pass filter (200Hz) to white noise
+    const brownFilter = ctx.createBiquadFilter();
+    brownFilter.type = 'lowpass';
+    brownFilter.frequency.value = 200;
+
     const noiseGain = ctx.createGain();
     noiseGain.gain.value = noiseVolume;
     noiseGainRef.current = noiseGain;
 
-    noiseSource.connect(noiseGain).connect(ctx.destination);
+    noiseSource.connect(brownFilter).connect(noiseGain).connect(ctx.destination);
     noiseRef.current = noiseSource;
 
     oscL.start();
