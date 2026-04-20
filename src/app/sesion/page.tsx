@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation'; // Added
 import { supabase, FIXED_USER_ID } from '@/lib/supabase';
-import { Play, Pause, Square, Wind, Volume2 } from 'lucide-react';
+import { Play, Pause, Square, Wind, Volume2, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WaveVisualizer from '@/components/WaveVisualizer';
 
