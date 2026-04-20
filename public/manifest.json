@@ -1,0 +1,17 @@
+{
+  "name": "Sueño Binaural",
+  "short_name": "Binaural",
+  "description": "App de Sonidos Binaurales para el Sueño",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0E1A",
+  "theme_color": "#0A0E1A",
+  "icons": [
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
