@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation'; // Added
 import { supabase, FIXED_USER_ID } from '@/lib/supabase';
 import { Play, Pause, Square, Wind, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +15,7 @@ export default function SessionPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [noiseVolume, setNoiseVolume] = useState(0.5);
   const [completed, setCompleted] = useState(false);
+  const router = useRouter();
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const oscRef = useRef<{ l: OscillatorNode; r: OscillatorNode } | null>(null);
@@ -23,12 +25,22 @@ export default function SessionPage() {
 
   useEffect(() => {
     async function fetchProfile() {
-      const { data } = await supabase
+      console.log('Intentando cargar perfil para:', FIXED_USER_ID);
+      const { data, error } = await supabase
         .from('user_profile')
         .select('*')
         .eq('id', FIXED_USER_ID)
         .single();
       
+      if (error) {
+        console.error('Error de Supabase:', error.code, error.message);
+        if (error.code === 'PGRST116') {
+          console.log('Perfil no encontrado, redirigiendo...');
+          router.push('/');
+          return;
+        }
+      }
+
       if (data) {
         setProfile(data);
         setTimeLeft(data.plan.duration_min * 60);
@@ -41,7 +53,7 @@ export default function SessionPage() {
     fetchProfile();
 
     return () => stopAudio();
-  }, []);
+  }, [router]);
 
   const initAudio = () => {
     if (!audioCtxRef.current) {
