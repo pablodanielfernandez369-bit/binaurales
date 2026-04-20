@@ -12,8 +12,7 @@ export default async function Home() {
 
   // If user already has a plan, redirect to session (or dashboard)
   if (profile?.plan) {
-    // redirect('/sesion'); 
-    // Commented out for now until /sesion is created
+    redirect('/sesion'); 
   }
 
   return (
