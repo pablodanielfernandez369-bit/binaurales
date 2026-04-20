@@ -10,6 +10,7 @@ export default function SessionPage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false); // New state
   const [timeLeft, setTimeLeft] = useState(0);
   const [noiseVolume, setNoiseVolume] = useState(0.5);
   const [completed, setCompleted] = useState(false);
@@ -109,6 +110,10 @@ export default function SessionPage() {
   };
 
   const togglePlay = async () => {
+    if (!hasStarted) {
+      setHasStarted(true);
+    }
+
     if (isPlaying) {
       stopAudio();
     } else {
@@ -167,67 +172,127 @@ export default function SessionPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-lg text-center"
       >
-        <div className="mb-8">
-          <span className="px-3 py-1 rounded-full bg-[#4B2C69]/30 text-[#7B9CFF] text-xs font-medium uppercase tracking-widest border border-[#7B9CFF]/20">
-            Tratamiento {profile.plan.wave_type}
-          </span>
-          <h1 className="mt-4 text-3xl font-light tracking-tight text-white">
-            Tu Sesión de Descanso
-          </h1>
-          <p className="mt-2 text-gray-400 font-light italic">
-            "{profile.plan.description}"
-          </p>
-        </div>
-
-        <div className="relative mb-12 flex flex-col items-center justify-center">
-          <div className="text-6xl font-extralight tracking-tighter text-[#7B9CFF] mb-4">
-            {formatTime(timeLeft)}
-          </div>
-          <WaveVisualizer isPlaying={isPlaying} frequency={profile.plan.frequency_hz} />
-        </div>
-
-        <div className="space-y-8 w-full px-8">
-          <div className="flex items-center justify-center gap-6">
-            <button
-              onClick={togglePlay}
-              className={`w-20 h-20 rounded-full flex items-center justify-center transition-all transform active:scale-95 ${
-                isPlaying 
-                ? 'bg-[#4B2C69] text-white shadow-lg shadow-[#4B2C69]/40' 
-                : 'bg-[#7B9CFF] text-[#0A0E1A] shadow-lg shadow-[#7B9CFF]/40'
-              }`}
+        <AnimatePresence mode="wait">
+          {!hasStarted ? (
+            <motion.div
+              key="intro"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.05 }}
+              className="space-y-8"
             >
-              {isPlaying ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
-            </button>
-            
-            {isPlaying && (
-              <button
-                onClick={stopAudio}
-                className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10"
-              >
-                <Square size={20} />
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-4 pt-4 border-t border-white/5">
-            <div className="flex items-center justify-between text-xs text-gray-500 uppercase tracking-widest">
-              <div className="flex items-center gap-2">
-                <Wind size={14} />
-                <span>Ruido Blanco</span>
+              <div>
+                <span className="px-3 py-1 rounded-full bg-[#4B2C69]/30 text-[#7B9CFF] text-xs font-medium uppercase tracking-widest border border-[#7B9CFF]/20">
+                  Plan Personalizado
+                </span>
+                <h1 className="mt-4 text-4xl font-light tracking-tight text-white leading-tight">
+                  ¿Listo para tu <br/> <span className="text-[#7B9CFF]">descanso profundo?</span>
+                </h1>
               </div>
-              <span>{Math.round(noiseVolume * 100)}%</span>
-            </div>
-            <input 
-              type="range" 
-              min="0" 
-              max="1" 
-              step="0.01"
-              value={noiseVolume}
-              onChange={(e) => handleNoiseChange(parseFloat(e.target.value))}
-              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#7B9CFF]"
-            />
-          </div>
-        </div>
+
+              <div className="bg-[#4B2C69]/10 border border-white/5 rounded-3xl p-8 space-y-6 text-left">
+                <div className="flex items-center gap-4 text-gray-300">
+                  <div className="w-10 h-10 rounded-xl bg-[#0A0E1A] flex items-center justify-center text-[#7B9CFF]">
+                    <Brain size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">Frecuencia de Onda</p>
+                    <p className="text-sm font-medium">{profile.plan.wave_type} ({profile.plan.frequency_hz} Hz)</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4 text-gray-300">
+                  <div className="w-10 h-10 rounded-xl bg-[#0A0E1A] flex items-center justify-center text-[#7B9CFF]">
+                    <Volume2 size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">Duración Estimada</p>
+                    <p className="text-sm font-medium">{profile.plan.duration_min} Minutos</p>
+                  </div>
+                </div>
+
+                <p className="text-sm text-gray-400 font-light leading-relaxed border-t border-white/5 pt-4">
+                  Recomendación: Asegúrate de estar en un lugar tranquilo y usar auriculares para el efecto binaural.
+                </p>
+              </div>
+
+              <button
+                onClick={togglePlay}
+                className="w-full py-5 rounded-2xl bg-[#7B9CFF] text-[#0A0E1A] font-medium text-lg shadow-xl shadow-[#7B9CFF]/20 transition-transform active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Play size={20} fill="currentColor" />
+                Iniciar Sesión
+              </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="player"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full"
+            >
+              <div className="mb-8">
+                <span className="px-3 py-1 rounded-full bg-[#4B2C69]/30 text-[#7B9CFF] text-xs font-medium uppercase tracking-widest border border-[#7B9CFF]/20">
+                  Tratamiento {profile.plan.wave_type}
+                </span>
+                <h1 className="mt-4 text-3xl font-light tracking-tight text-white">
+                  Tu Sesión de Descanso
+                </h1>
+                <p className="mt-2 text-gray-400 font-light italic">
+                  "{profile.plan.description}"
+                </p>
+              </div>
+
+              <div className="relative mb-12 flex flex-col items-center justify-center">
+                <div className="text-6xl font-extralight tracking-tighter text-[#7B9CFF] mb-4">
+                  {formatTime(timeLeft)}
+                </div>
+                <WaveVisualizer isPlaying={isPlaying} frequency={profile.plan.frequency_hz} />
+              </div>
+
+              <div className="space-y-8 w-full px-8">
+                <div className="flex items-center justify-center gap-6">
+                  <button
+                    onClick={togglePlay}
+                    className={`w-20 h-20 rounded-full flex items-center justify-center transition-all transform active:scale-95 ${
+                      isPlaying 
+                      ? 'bg-[#4B2C69] text-white shadow-lg shadow-[#4B2C69]/40' 
+                      : 'bg-[#7B9CFF] text-[#0A0E1A] shadow-lg shadow-[#7B9CFF]/40'
+                    }`}
+                  >
+                    {isPlaying ? <Pause size={32} /> : <Play size={32} className="ml-1" />}
+                  </button>
+                  
+                  <button
+                    onClick={stopAudio}
+                    className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10"
+                  >
+                    <Square size={20} />
+                  </button>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between text-xs text-gray-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-2">
+                      <Wind size={14} />
+                      <span>Ruido Blanco</span>
+                    </div>
+                    <span>{Math.round(noiseVolume * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="1" 
+                    step="0.01"
+                    value={noiseVolume}
+                    onChange={(e) => handleNoiseChange(parseFloat(e.target.value))}
+                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#7B9CFF]"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {completed && (
