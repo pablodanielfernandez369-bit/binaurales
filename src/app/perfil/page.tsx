@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase, FIXED_USER_ID } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { User, Activity, Trash2, ChevronRight, Moon, Brain, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase, FIXED_USER_ID } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Play, Pause, Square, Wind, Volume2, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WaveVisualizer from '@/components/WaveVisualizer';

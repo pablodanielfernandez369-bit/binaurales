@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, FIXED_USER_ID } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { motion } from 'framer-motion';
 import { Activity, Calendar, CheckCircle2, Clock, Info, TrendingUp, AlertTriangle } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, isSameWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
+import SleepCheckin from '@/components/SleepCheckin';
 
 interface Session {
   id: string;

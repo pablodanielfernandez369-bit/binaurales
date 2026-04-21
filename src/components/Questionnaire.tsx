@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, Moon, Brain, ShieldCheck } from 'lucide-react';
-import { supabase, FIXED_USER_ID } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { generateDiagnostic, SleepPlan, QuestionnaireResponses } from '@/lib/diagnostic';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
