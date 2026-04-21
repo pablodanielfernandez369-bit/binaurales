@@ -30,17 +30,16 @@ function SessionContent() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const oscRef = useRef<{ l: OscillatorNode; r: OscillatorNode } | null>(null);
-  const noiseRef = useRef<AudioBufferSourceNode | null>(null);
+  const noiseNodeRef = useRef<AudioWorkletNode | null>(null);
   const noiseGainRef = useRef<GainNode | null>(null);
-  const noiseBufferRef = useRef<AudioBuffer | null>(null);
+  const workletLoadedRef = useRef<Promise<void> | null>(null);
   
   // Logic Refs
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. Load Profile (Using FIXED_USER_ID as requested for stability)
+  // 1. Load Profile
   useEffect(() => {
     async function init() {
-      // Fetch profile
       const { data: profileData } = await supabase
         .from('user_profile')
         .select('*')
@@ -67,48 +66,24 @@ function SessionContent() {
     };
   }, [router, isPlaying]);
 
-  const initAudioContext = () => {
+  const initAudioContext = async () => {
     if (!audioCtxRef.current) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      audioCtxRef.current = new AudioContextClass();
+      audioCtxRef.current = new AudioContextClass({ latencyHint: 'playback' });
       
       const masterGain = audioCtxRef.current.createGain();
       masterGain.gain.value = 0; 
       masterGain.connect(audioCtxRef.current.destination);
       masterGainRef.current = masterGain;
+
+      if (!workletLoadedRef.current) {
+        workletLoadedRef.current = audioCtxRef.current.audioWorklet.addModule('/audio/noise-processor.js');
+      }
+      await workletLoadedRef.current;
     }
   };
 
-  const createSeamlessNoise = (ctx: AudioContext, duration: number, crossfade: number) => {
-    const sampleRate = ctx.sampleRate;
-    const mainSize = sampleRate * duration;
-    const fadeSize = sampleRate * crossfade;
-    const totalSize = mainSize + fadeSize;
-    
-    const tempBuffer = new Float32Array(totalSize);
-    let lastOut = 0.0;
-    for (let i = 0; i < totalSize; i++) {
-      const white = Math.random() * 2 - 1;
-      const out = (lastOut + (0.02 * white)) / 1.02;
-      tempBuffer[i] = out * 3.5;
-      lastOut = out;
-    }
-
-    const buffer = ctx.createBuffer(1, mainSize, sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < mainSize; i++) data[i] = tempBuffer[i];
-
-    for (let i = 0; i < fadeSize; i++) {
-      const alpha = i / fadeSize;
-      const startVal = data[i];
-      const endVal = tempBuffer[mainSize + i];
-      data[i] = startVal * (1 - alpha) + endVal * alpha;
-    }
-
-    return buffer;
-  };
-
-  const startAudioGraph = () => {
+  const startAudioGraph = async () => {
     const ctx = audioCtxRef.current!;
     const plan = profile.plan;
     const now = ctx.currentTime;
@@ -130,25 +105,18 @@ function SessionContent() {
     }
     oscRef.current = { l: oscL, r: oscR };
 
-    // Seamless Brown Noise (Reusing buffer if exists)
-    if (!noiseBufferRef.current) {
-      noiseBufferRef.current = createSeamlessNoise(ctx, 5, 0.5);
-    }
-    
-    const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = noiseBufferRef.current;
-    noiseSource.loop = true;
-
+    // Infinite Brown Noise using Worklet
+    const noiseNode = new AudioWorkletNode(ctx, 'brown-noise-processor');
     const noiseGain = ctx.createGain();
     noiseGain.gain.value = noiseVolume;
     noiseGainRef.current = noiseGain;
 
     if (!muteNoise) {
-      noiseSource.connect(noiseGain).connect(masterGainRef.current!);
+      noiseNode.connect(noiseGain).connect(masterGainRef.current!);
     }
-    noiseRef.current = noiseSource;
+    noiseNodeRef.current = noiseNode;
 
-    // Click Detector (Only if Debug and DebugMode active)
+    // Click Detector
     if (isDebugRequested && debugMode) {
       const analyser = ctx.createAnalyser();
       masterGainRef.current!.connect(analyser);
@@ -158,7 +126,7 @@ function SessionContent() {
         analyser.getFloatTimeDomainData(monitorData);
         for (let i = 1; i < monitorData.length; i++) {
           const delta = Math.abs(monitorData[i] - monitorData[i-1]);
-          if (delta > 0.6) {
+          if (delta > 0.2) {
             console.warn(`[ClickDetector] ALERT at ${ctx.currentTime.toFixed(2)}s | Delta: ${delta.toFixed(3)}`);
             break;
           }
@@ -170,26 +138,26 @@ function SessionContent() {
 
     oscL.start(now);
     oscR.start(now);
-    noiseSource.start(now);
 
-    // Initial Fade-in 
-    masterGainRef.current!.gain.cancelScheduledValues(now);
-    masterGainRef.current!.gain.setValueAtTime(masterGainRef.current!.gain.value || 0, now);
-    masterGainRef.current!.gain.linearRampToValueAtTime(0.5, now + 0.1);
+    const masterGainGain = masterGainRef.current!.gain;
+    masterGainGain.cancelScheduledValues(now);
+    masterGainGain.setValueAtTime(masterGainGain.value || 0, now);
+    masterGainGain.linearRampToValueAtTime(0.5, now + 0.1);
   };
 
-  const stopAudio = async () => {
+  const stopAudio = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
     
     if (audioCtxRef.current && masterGainRef.current) {
       const ctx = audioCtxRef.current;
       const now = ctx.currentTime;
+      const stopDuration = 0.05;
       
       masterGainRef.current.gain.cancelScheduledValues(now);
       masterGainRef.current.gain.setValueAtTime(masterGainRef.current.gain.value, now);
-      masterGainRef.current.gain.linearRampToValueAtTime(0, now + 0.1);
+      masterGainRef.current.gain.linearRampToValueAtTime(0, now + stopDuration);
 
-      const stopTime = now + 0.12;
+      const stopTime = now + stopDuration + 0.01;
       
       if (oscRef.current) {
         oscRef.current.l.stop(stopTime);
@@ -197,23 +165,25 @@ function SessionContent() {
         oscRef.current.l.onended = () => {
           oscRef.current?.l.disconnect();
           oscRef.current?.r.disconnect();
+          oscRef.current = null;
         };
       }
       
-      if (noiseRef.current) {
-        noiseRef.current.stop(stopTime);
-        noiseRef.current.onended = () => {
-          noiseRef.current?.disconnect();
+      if (noiseNodeRef.current) {
+        setTimeout(() => {
+          noiseNodeRef.current?.disconnect();
           noiseGainRef.current?.disconnect();
-        };
+          noiseNodeRef.current = null;
+        }, stopDuration * 1000 + 10);
       }
     }
     
     setIsPlaying(false);
-  };
+  }, [isPlaying]);
 
-  const togglePlay = async () => {
-    initAudioContext();
+  const togglePlay = useCallback(async () => {
+    setLoading(true);
+    await initAudioContext();
     const ctx = audioCtxRef.current!;
 
     if (ctx.state === 'suspended') {
@@ -222,14 +192,15 @@ function SessionContent() {
 
     if (!hasStarted) {
       setHasStarted(true);
-      // Legacy session recording (compatible with current prod schema)
     }
 
     if (isPlaying) {
       await stopAudio();
+      setLoading(false);
     } else {
-      startAudioGraph();
+      await startAudioGraph();
       setIsPlaying(true);
+      setLoading(false);
       
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
@@ -241,7 +212,7 @@ function SessionContent() {
         });
       }, 1000);
     }
-  };
+  }, [isPlaying, hasStarted, handleComplete]);
 
   const handleComplete = async () => {
     await stopAudio();
