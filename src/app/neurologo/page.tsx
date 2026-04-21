@@ -33,44 +33,45 @@ export default function NeurologoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Attempt to get real user, fallback to FIXED_USER_ID
-        const { data: { user } } = await supabase.auth.getUser();
-        const activeUserId = user?.id || FIXED_USER_ID;
+      // Attempt to get real user, fallback to FIXED_USER_ID
+      const { data: { user } } = await supabase.auth.getUser();
+      const activeUserId = user?.id || FIXED_USER_ID;
 
-        const { data: sessionData, error: dbError } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('user_id', activeUserId)
-          .order('started_at', { ascending: false });
+      const { data: sessionData, error: dbError } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', activeUserId)
+        .order('started_at', { ascending: false });
 
-        if (dbError) {
-          console.error('[Neurologo] Database Error:', dbError);
-          // Specific message for missing columns (SQL common issue)
-          if (dbError.message.includes('started_at')) {
-            setError('Error de Esquema: La tabla sessions no tiene la columna started_at. Por favor, ejecuta el script SQL de migración.');
-          } else {
-            setError(`Error de Base de Datos: ${dbError.message}`);
-          }
-          return;
+      if (dbError) {
+        console.error('[Neurologo] Database Error:', dbError);
+        // Specific message for missing columns (SQL common issue)
+        if (dbError.message.includes('started_at')) {
+          setError('Error de Esquema: La tabla sessions no tiene la columna started_at. Por favor, ejecuta el script SQL de migración.');
+        } else {
+          setError(`Error de Base de Datos: ${dbError.message}`);
         }
-
-        if (sessionData) {
-          setSessions(sessionData);
-          processWeeklyStats(sessionData);
-        }
-      } catch (err) {
-        console.error('[Neurologo] Unexpected error:', err);
-        setError('Ocurrió un error inesperado al conectar con el servidor.');
-      } finally {
-        setLoading(false);
+        return;
       }
+
+      if (sessionData) {
+        setSessions(sessionData);
+        processWeeklyStats(sessionData);
+      }
+    } catch (err) {
+      console.error('[Neurologo] Unexpected error:', err);
+      setError('Ocurrió un error inesperado al conectar con el servidor.');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -157,6 +158,9 @@ export default function NeurologoPage() {
         <h1 className="text-3xl font-light text-white mb-2">Panel de Diagnóstico</h1>
         <p className="text-gray-400 font-light">Seguimiento clínico y ajustes de tratamiento.</p>
       </header>
+
+      {/* Sleep Check-in Section */}
+      <SleepCheckin />
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
