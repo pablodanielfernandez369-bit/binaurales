@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase, FIXED_USER_ID } from '@/lib/supabase';
 import { motion } from 'framer-motion';
 import { Activity, Calendar, CheckCircle2, Clock, Info, TrendingUp, AlertTriangle } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, isSameWeek } from 'date-fns';
@@ -39,22 +39,24 @@ export default function NeurologoPage() {
         setLoading(true);
         setError(null);
 
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
-        if (authError || !user) {
-          setError('No se pudo verificar la sesión. Por favor, inicia sesión.');
-          return;
-        }
+        // Attempt to get real user, fallback to FIXED_USER_ID
+        const { data: { user } } = await supabase.auth.getUser();
+        const activeUserId = user?.id || FIXED_USER_ID;
 
         const { data: sessionData, error: dbError } = await supabase
           .from('sessions')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', activeUserId)
           .order('started_at', { ascending: false });
 
         if (dbError) {
-          console.error('[Neurologo] Error fetching sessions:', dbError);
-          setError('No se pudieron cargar los datos clínicos. Reintenta más tarde.');
+          console.error('[Neurologo] Database Error:', dbError);
+          // Specific message for missing columns (SQL common issue)
+          if (dbError.message.includes('started_at')) {
+            setError('Error de Esquema: La tabla sessions no tiene la columna started_at. Por favor, ejecuta el script SQL de migración.');
+          } else {
+            setError(`Error de Base de Datos: ${dbError.message}`);
+          }
           return;
         }
 
@@ -64,7 +66,7 @@ export default function NeurologoPage() {
         }
       } catch (err) {
         console.error('[Neurologo] Unexpected error:', err);
-        setError('Ocurrió un error inesperado al cargar la información.');
+        setError('Ocurrió un error inesperado al conectar con el servidor.');
       } finally {
         setLoading(false);
       }
