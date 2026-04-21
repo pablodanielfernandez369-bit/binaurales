@@ -23,14 +23,18 @@ export default function Navbar() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Don't show navbar if not logged in or on questionnaire/login
-  if (!session || pathname === '/' || pathname === '/login') return null;
+  // Don't show navbar on questionnaire or login (clean landing)
+  if (pathname === '/' || pathname === '/login') return null;
 
-  const navItems = [
-    { name: 'Sesión', href: '/sesion', icon: PlayCircle },
-    { name: 'Clínico', href: '/neurologo', icon: Activity },
-    { name: 'Perfil', href: '/perfil', icon: User },
-  ];
+  const navItems = session 
+    ? [
+        { name: 'Sesión', href: '/sesion', icon: PlayCircle },
+        { name: 'Clínico', href: '/neurologo', icon: Activity },
+        { name: 'Perfil', href: '/perfil', icon: User },
+      ]
+    : [
+        { name: 'Entrar', href: '/login', icon: User },
+      ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#0A0E1A]/80 backdrop-blur-lg border-t border-white/5 pb-safe">

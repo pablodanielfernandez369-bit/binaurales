@@ -13,14 +13,18 @@ export default function ProfilePage() {
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const router = useRouter();
 
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
   useEffect(() => {
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        router.push('/login');
+        router.replace('/login');
         return;
       }
+
+      setUserEmail(user.email || null);
 
       const { data: profileData } = await supabase
         .from('user_profile')
@@ -44,7 +48,8 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/login');
+    router.replace('/login');
+    router.refresh(); // Ensure all server states are cleared
   };
 
   const handleReset = async () => {
@@ -72,7 +77,7 @@ export default function ProfilePage() {
           <div>
             <h1 className="text-2xl font-light text-white">Mi Perfil</h1>
             <p className="text-[10px] text-[#7B9CFF] uppercase tracking-widest mt-1">
-              {profile?.email || 'Miembros'}
+              {userEmail || 'Cargando...'}
             </p>
           </div>
           <button 
