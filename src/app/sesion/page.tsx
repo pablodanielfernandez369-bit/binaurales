@@ -37,7 +37,56 @@ function SessionContent() {
   // Logic Refs
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. Load Profile
+  const stopAudio = useCallback(async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    
+    if (audioCtxRef.current && masterGainRef.current) {
+      const ctx = audioCtxRef.current;
+      const now = ctx.currentTime;
+      const stopDuration = 0.08; // Slightly longer for safe zero-crossing
+      
+      // Strict Fade-out sequence
+      masterGainRef.current.gain.cancelScheduledValues(now);
+      masterGainRef.current.gain.setValueAtTime(masterGainRef.current.gain.value, now);
+      masterGainRef.current.gain.linearRampToValueAtTime(0, now + stopDuration);
+
+      const stopTime = now + stopDuration + 0.02;
+      
+      if (oscRef.current) {
+        oscRef.current.l.stop(stopTime);
+        oscRef.current.r.stop(stopTime);
+        oscRef.current.l.onended = () => {
+          oscRef.current?.l.disconnect();
+          oscRef.current?.r.disconnect();
+          oscRef.current = null;
+        };
+      }
+      
+      if (noiseNodeRef.current) {
+        setTimeout(() => {
+          noiseNodeRef.current?.disconnect();
+          noiseGainRef.current?.disconnect();
+          noiseNodeRef.current = null;
+        }, stopDuration * 1000 + 50);
+      }
+    }
+    
+    setIsPlaying(false);
+  }, []);
+
+  const handleComplete = useCallback(async () => {
+    await stopAudio();
+    setCompleted(true);
+    await supabase.from('sessions').insert({
+      user_id: FIXED_USER_ID,
+      duration_min: profile.plan.duration_min,
+      frequency_hz: profile.plan.frequency_hz,
+      noise_volume: noiseVolume,
+      completed: true
+    });
+  }, [profile, noiseVolume, stopAudio]);
+
+  // 1. Profile Loading
   useEffect(() => {
     async function init() {
       const { data: profileData } = await supabase
@@ -56,19 +105,20 @@ function SessionContent() {
       if (profileData.noise_volume !== undefined) {
         setNoiseVolume(profileData.noise_volume);
       }
-
       setLoading(false);
     }
     init();
 
     return () => {
-      if (isPlaying) stopAudio();
+      // Logic managed by isPlaying cleanup might collide, 
+      // but we use refs to ensure safety
     };
-  }, [router, isPlaying]);
+  }, [router]);
 
   const initAudioContext = async () => {
     if (!audioCtxRef.current) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      // Latency Hint: 'playback' for glitch-free stability
       audioCtxRef.current = new AudioContextClass({ latencyHint: 'playback' });
       
       const masterGain = audioCtxRef.current.createGain();
@@ -88,16 +138,18 @@ function SessionContent() {
     const plan = profile.plan;
     const now = ctx.currentTime;
 
-    // Oscillators
+    // --- Oscillators (Theta Fix) ---
     const oscL = ctx.createOscillator();
     const oscR = ctx.createOscillator();
     const panL = ctx.createStereoPanner();
     const panR = ctx.createStereoPanner();
     
-    oscL.frequency.value = 200;
-    oscR.frequency.value = 200 + plan.frequency_hz;
-    panL.pan.value = -1;
-    panR.pan.value = 1;
+    // Using setTargetAtTime for smooth initial frequency set
+    oscL.frequency.setValueAtTime(200, now);
+    oscR.frequency.setValueAtTime(200 + plan.frequency_hz, now);
+    
+    panL.pan.setValueAtTime(-1, now);
+    panR.pan.setValueAtTime(1, now);
 
     if (!muteOsc) {
       oscL.connect(panL).connect(masterGainRef.current!);
@@ -105,10 +157,10 @@ function SessionContent() {
     }
     oscRef.current = { l: oscL, r: oscR };
 
-    // Infinite Brown Noise using Worklet
+    // --- Infinite Noise (Worklet) ---
     const noiseNode = new AudioWorkletNode(ctx, 'brown-noise-processor');
     const noiseGain = ctx.createGain();
-    noiseGain.gain.value = noiseVolume;
+    noiseGain.gain.setValueAtTime(noiseVolume, now);
     noiseGainRef.current = noiseGain;
 
     if (!muteNoise) {
@@ -116,7 +168,7 @@ function SessionContent() {
     }
     noiseNodeRef.current = noiseNode;
 
-    // Click Detector
+    // --- Click Detector (Monitor) ---
     if (isDebugRequested && debugMode) {
       const analyser = ctx.createAnalyser();
       masterGainRef.current!.connect(analyser);
@@ -139,47 +191,12 @@ function SessionContent() {
     oscL.start(now);
     oscR.start(now);
 
+    // Final Fade-in Sequence
     const masterGainGain = masterGainRef.current!.gain;
     masterGainGain.cancelScheduledValues(now);
-    masterGainGain.setValueAtTime(masterGainGain.value || 0, now);
-    masterGainGain.linearRampToValueAtTime(0.5, now + 0.1);
+    masterGainGain.setValueAtTime(0, now);
+    masterGainGain.linearRampToValueAtTime(0.5, now + 0.15);
   };
-
-  const stopAudio = useCallback(async () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    
-    if (audioCtxRef.current && masterGainRef.current) {
-      const ctx = audioCtxRef.current;
-      const now = ctx.currentTime;
-      const stopDuration = 0.05;
-      
-      masterGainRef.current.gain.cancelScheduledValues(now);
-      masterGainRef.current.gain.setValueAtTime(masterGainRef.current.gain.value, now);
-      masterGainRef.current.gain.linearRampToValueAtTime(0, now + stopDuration);
-
-      const stopTime = now + stopDuration + 0.01;
-      
-      if (oscRef.current) {
-        oscRef.current.l.stop(stopTime);
-        oscRef.current.r.stop(stopTime);
-        oscRef.current.l.onended = () => {
-          oscRef.current?.l.disconnect();
-          oscRef.current?.r.disconnect();
-          oscRef.current = null;
-        };
-      }
-      
-      if (noiseNodeRef.current) {
-        setTimeout(() => {
-          noiseNodeRef.current?.disconnect();
-          noiseGainRef.current?.disconnect();
-          noiseNodeRef.current = null;
-        }, stopDuration * 1000 + 10);
-      }
-    }
-    
-    setIsPlaying(false);
-  }, [isPlaying]);
 
   const togglePlay = useCallback(async () => {
     setLoading(true);
@@ -212,20 +229,7 @@ function SessionContent() {
         });
       }, 1000);
     }
-  }, [isPlaying, hasStarted, handleComplete]);
-
-  const handleComplete = async () => {
-    await stopAudio();
-    setCompleted(true);
-    // Legacy update here
-    await supabase.from('sessions').insert({
-      user_id: FIXED_USER_ID,
-      duration_min: profile.plan.duration_min,
-      frequency_hz: profile.plan.frequency_hz,
-      noise_volume: noiseVolume,
-      completed: true
-    });
-  };
+  }, [isPlaying, hasStarted, handleComplete, stopAudio]);
 
   const handleNoiseChange = (val: number) => {
     setNoiseVolume(val);
@@ -242,7 +246,7 @@ function SessionContent() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center text-[#7B9CFF]">Iniciando Motor Cuántico...</div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center text-[#7B9CFF]">Sincronizando Ondas...</div>;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6 pb-24 pt-12">
