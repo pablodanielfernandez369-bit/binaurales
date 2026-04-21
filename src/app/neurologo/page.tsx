@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { motion } from 'framer-motion';
 import { Activity, Calendar, CheckCircle2, Clock, Info, TrendingUp, AlertTriangle } from 'lucide-react';
@@ -26,6 +27,7 @@ interface WeeklyStat {
 }
 
 export default function NeurologoPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
   const [loading, setLoading] = useState(true);
