@@ -4,6 +4,18 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const isDebug = searchParams.get('debug') === '1';
+
+  // Diagnostic Flags (Safe - no secrets leaked)
+  const debugInfo = {
+    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
+    serviceRoleKeyLen: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().length ?? 0,
+    hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim()),
+    hasAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim()),
+    vercelEnv: process.env.VERCEL_ENV || 'local',
+  };
+
   try {
     const { email } = await request.json();
 
@@ -12,8 +24,11 @@ export async function POST(request: Request) {
     }
 
     if (!supabaseAdmin) {
-      console.error('[Auth-OTP] Supabase Admin client is not initialized (missing service role key).');
-      return NextResponse.json({ error: 'Error de configuración del servidor.' }, { status: 500 });
+      console.error('[Auth-OTP] Supabase Admin client is not initialized.', debugInfo);
+      return NextResponse.json({ 
+        error: 'Error de configuración del servidor.',
+        ...(isDebug ? debugInfo : {})
+      }, { status: 500 });
     }
 
     // 1. Verify Allowlist (Server-Side Secure)
