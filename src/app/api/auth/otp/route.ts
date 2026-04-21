@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const { email } = await request.json();
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+    }
+
+    if (!supabaseAdmin) {
+      console.error('[Auth-OTP] Supabase Admin client is not initialized (missing service role key).');
+      return NextResponse.json({ error: 'Error de configuración del servidor.' }, { status: 500 });
     }
 
     // 1. Verify Allowlist (Server-Side Secure)

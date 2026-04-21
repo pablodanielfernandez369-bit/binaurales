@@ -186,7 +186,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           <Question 
             label="¿Escuchaste el final de la sesión?"
             value={answers.q1a}
-            onChange={(val) => setAnswers({...answers, q1a: val})}
+            onChange={(val: string) => setAnswers({...answers, q1a: val})}
             options={[
               { id: 'finished', label: 'Sí, terminó' },
               { id: 'unsure', label: 'No sé / me dormí' },
@@ -197,7 +197,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           <Question 
             label="¿Te dormiste MIENTRAS sonaba?"
             value={answers.q1b}
-            onChange={(val) => setAnswers({...answers, q1b: val})}
+            onChange={(val: string) => setAnswers({...answers, q1b: val})}
             options={[
               { id: 'no', label: 'No' },
               { id: 'yes', label: 'Sí' },
@@ -208,7 +208,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           <Question 
             label="¿Te dormiste DESPUÉS de que terminó?"
             value={answers.q1c}
-            onChange={(val) => setAnswers({...answers, q1c: val})}
+            onChange={(val: string) => setAnswers({...answers, q1c: val})}
             options={[
               { id: 'no', label: 'No' },
               { id: 'yes', label: 'Sí' },
@@ -227,7 +227,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
                 <Question 
                   label="¿Cuánto tardaste en dormirte (aprox)?"
                   value={answers.q1d}
-                  onChange={(val) => setAnswers({...answers, q1d: val})}
+                  onChange={(val: string) => setAnswers({...answers, q1d: val})}
                   options={[
                     { id: '<15', label: '<15 min' },
                     { id: '15-30', label: '15-30 min' },
@@ -247,7 +247,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
             <Question 
               label="¿Cuántas veces te despertaste?"
               value={answers.q2}
-              onChange={(val) => setAnswers({...answers, q2: val})}
+              onChange={(val: string) => setAnswers({...answers, q2: val})}
               options={[
                 { id: '0', label: '0' },
                 { id: '1', label: '1' },
@@ -262,7 +262,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
             <Question 
               label="¿Cómo te sientes comparado con antes?"
               value={answers.q3}
-              onChange={(val) => setAnswers({...answers, q3: val})}
+              onChange={(val: string) => setAnswers({...answers, q3: val})}
               options={[
                 { id: 'much_better', label: 'Mucho mejor' },
                 { id: 'better', label: 'Mejor' },
