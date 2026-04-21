@@ -29,23 +29,43 @@ export default function NeurologoPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        setLoading(true);
+        setError(null);
 
-      const { data: sessionData } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('started_at', { ascending: false });
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          setError('No se pudo verificar la sesión. Por favor, inicia sesión.');
+          return;
+        }
 
-      if (sessionData) {
-        setSessions(sessionData);
-        processWeeklyStats(sessionData);
+        const { data: sessionData, error: dbError } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('started_at', { ascending: false });
+
+        if (dbError) {
+          console.error('[Neurologo] Error fetching sessions:', dbError);
+          setError('No se pudieron cargar los datos clínicos. Reintenta más tarde.');
+          return;
+        }
+
+        if (sessionData) {
+          setSessions(sessionData);
+          processWeeklyStats(sessionData);
+        }
+      } catch (err) {
+        console.error('[Neurologo] Unexpected error:', err);
+        setError('Ocurrió un error inesperado al cargar la información.');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     fetchData();
   }, []);
@@ -78,9 +98,51 @@ export default function NeurologoPage() {
     setWeeklyStats(sortedStats);
   };
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center">Cargando datos clínicos...</div>;
+  if (loading) return (
+    <div className="flex min-h-screen flex-col items-center justify-center space-y-4">
+      <div className="w-8 h-8 border-4 border-[#7B9CFF] border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-[#7B9CFF] font-light animate-pulse">Cargando datos clínicos...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center space-y-6">
+      <div className="w-16 h-16 rounded-3xl bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/20">
+        <AlertTriangle size={32} />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-xl font-light text-white">Oops, algo salió mal</h2>
+        <p className="text-gray-400 font-light max-w-xs">{error}</p>
+      </div>
+      <button 
+        onClick={() => window.location.reload()}
+        className="px-8 py-3 rounded-2xl bg-white/5 text-white border border-white/10 hover:bg-white/10 transition-colors"
+      >
+        Reintentar
+      </button>
+    </div>
+  );
 
   const totalSessions = sessions.length;
+
+  if (totalSessions === 0) return (
+    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center space-y-6">
+      <div className="w-16 h-16 rounded-3xl bg-[#7B9CFF]/10 flex items-center justify-center text-[#7B9CFF] border border-[#7B9CFF]/20">
+        <Activity size={32} />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-xl font-light text-white">Sin Registro Clínico</h2>
+        <p className="text-gray-400 font-light max-w-xs">Todavía no hay sesiones registradas en tu historial.</p>
+      </div>
+      <button 
+        onClick={() => router.push('/sesion')}
+        className="px-8 py-3 rounded-2xl bg-[#7B9CFF] text-[#0A0E1A] font-medium"
+      >
+        Comenzar Primera Sesión
+      </button>
+    </div>
+  );
+
   const completionRate = totalSessions > 0 
     ? Math.round((sessions.filter(s => s.status === 'completed').length / totalSessions) * 100) 
     : 0;
