@@ -38,14 +38,18 @@ export default function NeurologoPage() {
       setLoading(true);
       setError(null);
 
-      // Attempt to get real user, fallback to FIXED_USER_ID
-      const { data: { user } } = await supabase.auth.getUser();
-      const activeUserId = user?.id || FIXED_USER_ID;
+      // Required: Get real user
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (!authUser) {
+        router.push('/login');
+        return;
+      }
 
       const { data: sessionData, error: dbError } = await supabase
         .from('sessions')
         .select('*')
-        .eq('user_id', activeUserId)
+        .eq('user_id', authUser.id)
         .order('started_at', { ascending: false });
 
       if (dbError) {

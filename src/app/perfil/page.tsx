@@ -15,16 +15,23 @@ export default function ProfilePage() {
 
   useEffect(() => {
     async function fetchData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
       const { data: profileData } = await supabase
         .from('user_profile')
         .select('*')
-        .eq('id', FIXED_USER_ID)
+        .eq('id', user.id)
         .single();
       
       const { data: sessionsData } = await supabase
         .from('sessions')
         .select('*')
-        .eq('user_id', FIXED_USER_ID)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -33,11 +40,19 @@ export default function ProfilePage() {
       setLoading(false);
     }
     fetchData();
-  }, []);
+  }, [router]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
 
   const handleReset = async () => {
-    await supabase.from('user_profile').delete().eq('id', FIXED_USER_ID);
-    await supabase.from('sessions').delete().eq('user_id', FIXED_USER_ID);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from('user_profile').delete().eq('id', user.id);
+    await supabase.from('sessions').delete().eq('user_id', user.id);
     router.push('/');
   };
 
@@ -56,8 +71,16 @@ export default function ProfilePage() {
           </div>
           <div>
             <h1 className="text-2xl font-light text-white">Mi Perfil</h1>
-            <p className="text-xs text-[#7B9CFF] uppercase tracking-widest mt-1">Usuario Único</p>
+            <p className="text-[10px] text-[#7B9CFF] uppercase tracking-widest mt-1">
+              {profile?.email || 'Miembros'}
+            </p>
           </div>
+          <button 
+            onClick={handleLogout}
+            className="ml-auto px-4 py-2 rounded-xl bg-white/5 border border-white/5 text-gray-400 text-xs hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all font-medium uppercase tracking-widest"
+          >
+            Log Out
+          </button>
         </header>
 
         {/* Diagnostic Card */}

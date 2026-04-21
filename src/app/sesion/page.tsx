@@ -76,9 +76,12 @@ function SessionContent() {
 
   const handleComplete = useCallback(async () => {
     await stopAudio();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     setCompleted(true);
     await supabase.from('sessions').insert({
-      user_id: FIXED_USER_ID,
+      user_id: user.id,
       duration_min: profile.plan.duration_min,
       frequency_hz: profile.plan.frequency_hz,
       noise_volume: noiseVolume,
@@ -89,10 +92,17 @@ function SessionContent() {
   // 1. Profile Loading
   useEffect(() => {
     async function init() {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (!authUser) {
+        router.push('/login');
+        return;
+      }
+
       const { data: profileData } = await supabase
         .from('user_profile')
         .select('*')
-        .eq('id', FIXED_USER_ID)
+        .eq('id', authUser.id)
         .single();
       
       if (!profileData) {
@@ -110,8 +120,7 @@ function SessionContent() {
     init();
 
     return () => {
-      // Logic managed by isPlaying cleanup might collide, 
-      // but we use refs to ensure safety
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [router]);
 

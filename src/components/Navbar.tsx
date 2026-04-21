@@ -4,12 +4,27 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { PlayCircle, User, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [session, setSession] = useState<any>(null);
 
-  // Don't show navbar on the questionnaire page
-  if (pathname === '/') return null;
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Don't show navbar if not logged in or on questionnaire/login
+  if (!session || pathname === '/' || pathname === '/login') return null;
 
   const navItems = [
     { name: 'Sesión', href: '/sesion', icon: PlayCircle },

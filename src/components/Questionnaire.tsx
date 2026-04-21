@@ -102,11 +102,15 @@ export default function Questionnaire() {
     
     setIsSaving(true);
     try {
-      await supabase.from('user_profile').upsert({
-        id: FIXED_USER_ID,
-        ...fullResponses,
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      await supabase.from('user_profile').insert({
+        id: user.id,
+        email: user.email,
+        answers: fullResponses,
         plan: result.plan,
-        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
       });
     } catch (error) {
       console.error('Error saving profile:', error);
