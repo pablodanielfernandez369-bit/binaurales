@@ -1,70 +1,119 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation'; // Added
+import { useEffect, useState, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, FIXED_USER_ID } from '@/lib/supabase';
 import { Play, Pause, Square, Wind, Volume2, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WaveVisualizer from '@/components/WaveVisualizer';
 
-export default function SessionPage() {
+function SessionContent() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false); // New state
+  const [hasStarted, setHasStarted] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [noiseVolume, setNoiseVolume] = useState(0.05); // Default 5%
+  const [noiseVolume, setNoiseVolume] = useState(0.05);
   const [completed, setCompleted] = useState(false);
+  
+  // Debug Flags
+  const searchParams = useSearchParams();
+  const isDebugRequested = searchParams.get('debug') === '1';
+  const [debugMode, setDebugMode] = useState(false);
+  const [showVisualizer, setShowVisualizer] = useState(true);
+  const [muteOsc, setMuteOsc] = useState(false);
+  const [muteNoise, setMuteNoise] = useState(false);
+  
   const router = useRouter();
 
+  // Audio Refs
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
   const oscRef = useRef<{ l: OscillatorNode; r: OscillatorNode } | null>(null);
   const noiseRef = useRef<AudioBufferSourceNode | null>(null);
   const noiseGainRef = useRef<GainNode | null>(null);
+  const noiseBufferRef = useRef<AudioBuffer | null>(null);
+  
+  // Logic Refs
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // 1. Load Profile (Using FIXED_USER_ID as requested for stability)
   useEffect(() => {
-    async function fetchProfile() {
-      console.log('Intentando cargar perfil para:', FIXED_USER_ID);
-      const { data, error } = await supabase
+    async function init() {
+      // Fetch profile
+      const { data: profileData } = await supabase
         .from('user_profile')
         .select('*')
         .eq('id', FIXED_USER_ID)
         .single();
       
-      if (error) {
-        console.error('Error de Supabase:', error.code, error.message);
-        if (error.code === 'PGRST116') {
-          console.log('Perfil no encontrado, redirigiendo...');
-          router.push('/');
-          return;
-        }
+      if (!profileData) {
+        router.push('/');
+        return;
       }
 
-      if (data) {
-        setProfile(data);
-        setTimeLeft(data.plan.duration_min * 60);
-        if (data.noise_volume !== undefined) {
-          setNoiseVolume(data.noise_volume);
-        }
+      setProfile(profileData);
+      setTimeLeft(profileData.plan.duration_min * 60);
+      if (profileData.noise_volume !== undefined) {
+        setNoiseVolume(profileData.noise_volume);
       }
+
       setLoading(false);
     }
-    fetchProfile();
+    init();
 
-    return () => stopAudio();
-  }, [router]);
+    return () => {
+      if (isPlaying) stopAudio();
+    };
+  }, [router, isPlaying]);
 
-  const initAudio = () => {
+  const initAudioContext = () => {
     if (!audioCtxRef.current) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       audioCtxRef.current = new AudioContextClass();
+      
+      const masterGain = audioCtxRef.current.createGain();
+      masterGain.gain.value = 0; 
+      masterGain.connect(audioCtxRef.current.destination);
+      masterGainRef.current = masterGain;
+    }
+  };
+
+  const createSeamlessNoise = (ctx: AudioContext, duration: number, crossfade: number) => {
+    const sampleRate = ctx.sampleRate;
+    const mainSize = sampleRate * duration;
+    const fadeSize = sampleRate * crossfade;
+    const totalSize = mainSize + fadeSize;
+    
+    const tempBuffer = new Float32Array(totalSize);
+    let lastOut = 0.0;
+    for (let i = 0; i < totalSize; i++) {
+      const white = Math.random() * 2 - 1;
+      const out = (lastOut + (0.02 * white)) / 1.02;
+      tempBuffer[i] = out * 3.5;
+      lastOut = out;
     }
 
+    const buffer = ctx.createBuffer(1, mainSize, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < mainSize; i++) data[i] = tempBuffer[i];
+
+    for (let i = 0; i < fadeSize; i++) {
+      const alpha = i / fadeSize;
+      const startVal = data[i];
+      const endVal = tempBuffer[mainSize + i];
+      data[i] = startVal * (1 - alpha) + endVal * alpha;
+    }
+
+    return buffer;
+  };
+
+  const startAudioGraph = () => {
     const ctx = audioCtxRef.current!;
     const plan = profile.plan;
+    const now = ctx.currentTime;
 
-    // oscillators
+    // Oscillators
     const oscL = ctx.createOscillator();
     const oscR = ctx.createOscillator();
     const panL = ctx.createStereoPanner();
@@ -72,72 +121,114 @@ export default function SessionPage() {
     
     oscL.frequency.value = 200;
     oscR.frequency.value = 200 + plan.frequency_hz;
-    
     panL.pan.value = -1;
     panR.pan.value = 1;
 
-    const masterGain = ctx.createGain();
-    masterGain.gain.value = 0.5;
-
-    oscL.connect(panL).connect(masterGain);
-    oscR.connect(panR).connect(masterGain);
-    masterGain.connect(ctx.destination);
-
+    if (!muteOsc) {
+      oscL.connect(panL).connect(masterGainRef.current!);
+      oscR.connect(panR).connect(masterGainRef.current!);
+    }
     oscRef.current = { l: oscL, r: oscR };
 
-    // White Noise
-    const bufferSize = ctx.sampleRate * 2;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
+    // Seamless Brown Noise (Reusing buffer if exists)
+    if (!noiseBufferRef.current) {
+      noiseBufferRef.current = createSeamlessNoise(ctx, 5, 0.5);
     }
-
+    
     const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = buffer;
+    noiseSource.buffer = noiseBufferRef.current;
     noiseSource.loop = true;
-
-    // Brown noise: apply low-pass filter (200Hz) to white noise
-    const brownFilter = ctx.createBiquadFilter();
-    brownFilter.type = 'lowpass';
-    brownFilter.frequency.value = 200;
 
     const noiseGain = ctx.createGain();
     noiseGain.gain.value = noiseVolume;
     noiseGainRef.current = noiseGain;
 
-    noiseSource.connect(brownFilter).connect(noiseGain).connect(ctx.destination);
+    if (!muteNoise) {
+      noiseSource.connect(noiseGain).connect(masterGainRef.current!);
+    }
     noiseRef.current = noiseSource;
 
-    oscL.start();
-    oscR.start();
-    noiseSource.start();
+    // Click Detector (Only if Debug and DebugMode active)
+    if (isDebugRequested && debugMode) {
+      const analyser = ctx.createAnalyser();
+      masterGainRef.current!.connect(analyser);
+      const monitorData = new Float32Array(analyser.fftSize);
+      const checkClick = () => {
+        if (!audioCtxRef.current || audioCtxRef.current.state === 'closed' || !isPlaying) return;
+        analyser.getFloatTimeDomainData(monitorData);
+        for (let i = 1; i < monitorData.length; i++) {
+          const delta = Math.abs(monitorData[i] - monitorData[i-1]);
+          if (delta > 0.6) {
+            console.warn(`[ClickDetector] ALERT at ${ctx.currentTime.toFixed(2)}s | Delta: ${delta.toFixed(3)}`);
+            break;
+          }
+        }
+        if (isPlaying) requestAnimationFrame(checkClick);
+      };
+      checkClick();
+    }
+
+    oscL.start(now);
+    oscR.start(now);
+    noiseSource.start(now);
+
+    // Initial Fade-in 
+    masterGainRef.current!.gain.cancelScheduledValues(now);
+    masterGainRef.current!.gain.setValueAtTime(masterGainRef.current!.gain.value || 0, now);
+    masterGainRef.current!.gain.linearRampToValueAtTime(0.5, now + 0.1);
   };
 
-  const stopAudio = () => {
+  const stopAudio = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    if (oscRef.current) {
-      oscRef.current.l.stop();
-      oscRef.current.r.stop();
+    
+    if (audioCtxRef.current && masterGainRef.current) {
+      const ctx = audioCtxRef.current;
+      const now = ctx.currentTime;
+      
+      masterGainRef.current.gain.cancelScheduledValues(now);
+      masterGainRef.current.gain.setValueAtTime(masterGainRef.current.gain.value, now);
+      masterGainRef.current.gain.linearRampToValueAtTime(0, now + 0.1);
+
+      const stopTime = now + 0.12;
+      
+      if (oscRef.current) {
+        oscRef.current.l.stop(stopTime);
+        oscRef.current.r.stop(stopTime);
+        oscRef.current.l.onended = () => {
+          oscRef.current?.l.disconnect();
+          oscRef.current?.r.disconnect();
+        };
+      }
+      
+      if (noiseRef.current) {
+        noiseRef.current.stop(stopTime);
+        noiseRef.current.onended = () => {
+          noiseRef.current?.disconnect();
+          noiseGainRef.current?.disconnect();
+        };
+      }
     }
-    if (noiseRef.current) {
-      noiseRef.current.stop();
-    }
+    
     setIsPlaying(false);
   };
 
   const togglePlay = async () => {
+    initAudioContext();
+    const ctx = audioCtxRef.current!;
+
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
     if (!hasStarted) {
       setHasStarted(true);
+      // Legacy session recording (compatible with current prod schema)
     }
 
     if (isPlaying) {
-      stopAudio();
+      await stopAudio();
     } else {
-      if (audioCtxRef.current?.state === 'suspended') {
-        await audioCtxRef.current.resume();
-      }
-      initAudio();
+      startAudioGraph();
       setIsPlaying(true);
       
       timerRef.current = setInterval(() => {
@@ -153,10 +244,9 @@ export default function SessionPage() {
   };
 
   const handleComplete = async () => {
-    stopAudio();
+    await stopAudio();
     setCompleted(true);
-    
-    // Save session
+    // Legacy update here
     await supabase.from('sessions').insert({
       user_id: FIXED_USER_ID,
       duration_min: profile.plan.duration_min,
@@ -168,8 +258,10 @@ export default function SessionPage() {
 
   const handleNoiseChange = (val: number) => {
     setNoiseVolume(val);
-    if (noiseGainRef.current) {
-      noiseGainRef.current.gain.setTargetAtTime(val, audioCtxRef.current!.currentTime, 0.1);
+    if (noiseGainRef.current && audioCtxRef.current) {
+      const now = audioCtxRef.current.currentTime;
+      noiseGainRef.current.gain.cancelScheduledValues(now);
+      noiseGainRef.current.gain.setTargetAtTime(val, now, 0.1);
     }
   };
 
@@ -179,8 +271,7 @@ export default function SessionPage() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center">Cargando tratamiento...</div>;
-  if (!profile) return <div className="flex min-h-screen items-center justify-center">Error al cargar el perfil.</div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center text-[#7B9CFF]">Iniciando Motor Cuántico...</div>;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6 pb-24 pt-12">
@@ -264,7 +355,7 @@ export default function SessionPage() {
                 <div className="text-6xl font-extralight tracking-tighter text-[#7B9CFF] mb-4">
                   {formatTime(timeLeft)}
                 </div>
-                <WaveVisualizer isPlaying={isPlaying} frequency={profile.plan.frequency_hz} />
+                {showVisualizer && <WaveVisualizer isPlaying={isPlaying} frequency={profile.plan.frequency_hz} />}
               </div>
 
               <div className="space-y-8 w-full px-8">
@@ -281,7 +372,11 @@ export default function SessionPage() {
                   </button>
                   
                   <button
-                    onClick={stopAudio}
+                    onClick={() => {
+                      stopAudio();
+                      setHasStarted(false);
+                      setTimeLeft(profile.plan.duration_min * 60);
+                    }}
                     className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10"
                   >
                     <Square size={20} />
@@ -322,16 +417,57 @@ export default function SessionPage() {
                 <h2 className="text-2xl font-light text-[#7B9CFF] mb-2">Sesión Completada</h2>
                 <p className="text-gray-300 mb-8 font-light">Tu cerebro ha recibido el estímulo necesario. Que tengas un buen descanso.</p>
                 <button
-                  onClick={() => setCompleted(false)}
+                  onClick={() => {
+                    setCompleted(false);
+                    setHasStarted(false);
+                    router.push('/perfil');
+                  }}
                   className="w-full py-3 rounded-xl bg-[#7B9CFF] text-[#0A0E1A] font-medium transition-transform active:scale-95"
                 >
-                  Cerrar
+                  Ver Progreso
                 </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Diagnostic Menu - Hidden behind ?debug=1 */}
+        {isDebugRequested && (
+          <div className="mt-12 pt-8 border-t border-white/5 opacity-50 hover:opacity-100 transition-opacity">
+            <button 
+              onClick={() => setDebugMode(!debugMode)}
+              className="text-[10px] text-gray-500 uppercase tracking-widest mb-4"
+            >
+              {debugMode ? 'OCULTAR DIAGNÓSTICO' : 'MODO DIAGNÓSTICO'}
+            </button>
+            
+            {debugMode && (
+              <div className="flex flex-col gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                <label className="flex items-center justify-between text-xs text-gray-400">
+                  <span>Visualizador Activo</span>
+                  <input type="checkbox" checked={showVisualizer} onChange={(e) => setShowVisualizer(e.target.checked)} />
+                </label>
+                <label className="flex items-center justify-between text-xs text-gray-400">
+                  <span>Silenciar Binaural</span>
+                  <input type="checkbox" checked={muteOsc} onChange={(e) => setMuteOsc(e.target.checked)} />
+                </label>
+                <label className="flex items-center justify-between text-xs text-gray-400">
+                  <span>Silenciar Ruido</span>
+                  <input type="checkbox" checked={muteNoise} onChange={(e) => setMuteNoise(e.target.checked)} />
+                </label>
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </div>
+  );
+}
+
+export default function SessionPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Cargando...</div>}>
+      <SessionContent />
+    </Suspense>
   );
 }
