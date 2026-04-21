@@ -13,7 +13,7 @@ export default function Navbar() {
 
   const navItems = [
     { name: 'Sesión', href: '/sesion', icon: PlayCircle },
-    { name: 'Clínico', href: '/neurologo', icon: Activity },
+    // { name: 'Clínico', href: '/neurologo', icon: Activity },
     { name: 'Perfil', href: '/perfil', icon: User },
   ];
 
