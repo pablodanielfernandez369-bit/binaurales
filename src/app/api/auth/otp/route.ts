@@ -4,21 +4,38 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 export const runtime = 'nodejs'; // Ensure Node.js runtime for Service Role compatibility
 export const dynamic = 'force-dynamic';
 
+// Shared Diagnostic Flags (Safe - no secrets leaked)
+const getDebugInfo = () => ({
+  vercelEnv: process.env.VERCEL_ENV || 'local',
+  hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
+  serviceRoleKeyLen: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().length ?? 0,
+  hasSupabaseUrl: Boolean(process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()),
+  hasAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim()),
+});
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const isDebug = searchParams.get('debug') === '1';
+  
+  // Security: Block GET in production unless a valid DEBUG_TOKEN is provided or it's local dev
+  const isLocal = process.env.VERCEL_ENV === 'development' || !process.env.VERCEL_ENV;
+  const hasValidToken = searchParams.get('token') === process.env.DEBUG_TOKEN && Boolean(process.env.DEBUG_TOKEN);
+
+  if (!isDebug || (!isLocal && !hasValidToken)) {
+    return NextResponse.json({ error: 'Not allowed' }, { status: 404 });
+  }
+
+  return NextResponse.json({ diagnostics: getDebugInfo() });
+}
+
 export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
   const isDebug = searchParams.get('debug') === '1';
-
-  // Diagnostic Flags (Safe - no secrets leaked)
-  const debugInfo = {
-    vercelEnv: process.env.VERCEL_ENV || 'local',
-    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
-    serviceRoleKeyLen: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim().length ?? 0,
-    hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim()),
-    hasAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim()),
-  };
+  const debugInfo = getDebugInfo();
 
   try {
-    const { email } = await request.json();
+    const body = await request.json();
+    const email = body.email;
     const normalizedEmail = email?.toLowerCase().trim();
 
     if (!normalizedEmail) {
@@ -26,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     if (!supabaseAdmin) {
-      console.error('[otp] misconfig: Supabase Admin client is not initialized.', debugInfo);
+      console.error('[otp] misconfig: Supabase Admin client is null', debugInfo);
       return NextResponse.json({ 
         error: 'Error de configuración del servidor.',
         ...(isDebug ? debugInfo : {})
@@ -34,7 +51,6 @@ export async function POST(request: Request) {
     }
 
     // 1. Verify Allowlist (Server-Side Secure)
-    // We use maybeSingle to handle 'not found' gracefully.
     const { data: allowed, error: dbError } = await supabaseAdmin
       .from('allowed_emails')
       .select('email')
@@ -53,8 +69,6 @@ export async function POST(request: Request) {
     const { error: authError } = await supabaseAdmin.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        // Redirect directly to session. 
-        // Supabase client-side handles the token automatically on the target page.
         emailRedirectTo: `${new URL(request.url).origin}/sesion`,
       },
     });
