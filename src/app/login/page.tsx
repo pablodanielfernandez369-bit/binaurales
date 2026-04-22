@@ -1,22 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Send, Loader2, ShieldCheck, AlertCircle, Brain } from 'lucide-react';
-import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [isMounted, setIsMounted] = useState(false);
-
-  const searchParams = useSearchParams();
-  const isDebug = searchParams.get('debug') === '1';
+  const [isDebug, setIsDebug] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
+    // Safe way to check search params in client-side useEffect to avoid Suspense requirement
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      setIsDebug(sp.get('debug') === '1');
+    }
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -62,8 +63,6 @@ export default function LoginPage() {
     }
   };
 
-  // 1. STATIC SHELL (SSR & Initial Client Render)
-  // This avoids mismatch #418 by rendering the same structure on both sides.
   const renderContent = () => {
     if (status === 'success') {
       return (
@@ -129,7 +128,6 @@ export default function LoginPage() {
     );
   };
 
-  // 2. MAIN LAYOUT
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-[#0A0E1A]">
       <div className="w-full max-w-md">
@@ -143,10 +141,8 @@ export default function LoginPage() {
 
         <div className="bg-[#4B2C69]/10 border border-white/10 rounded-[32px] p-8 backdrop-blur-xl shadow-2xl overflow-hidden min-h-[300px]">
           {!isMounted ? (
-            // STATIC SHELL (SSR)
             renderContent()
           ) : (
-            // ANIMATED CLIENT
             <AnimatePresence mode="wait">
               <motion.div
                 key={status}

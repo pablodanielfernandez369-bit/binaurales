@@ -77,7 +77,13 @@ export async function POST(request: Request) {
       console.error('[otp] auth error:', authError);
       return NextResponse.json({ 
         error: 'Error al enviar el link de acceso.',
-        ...(isDebug ? { authError } : {})
+        ...(isDebug ? { 
+          authError: {
+            message: authError.message,
+            status: (authError as any).status,
+            name: authError.name
+          } 
+        } : {})
       }, { status: 500 });
     }
 
