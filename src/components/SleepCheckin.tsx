@@ -64,21 +64,8 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           setLastSession(sessions[0]);
         }
 
-        // 2. Fetch today's check-in
-        const { data: checkins } = await supabase
-          .from('daily_checkins')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('checkin_date', today)
-          .limit(1);
-
-        if (checkins && checkins.length > 0) {
-          setExistingCheckin(checkins[0]);
-          setAnswers(checkins[0].answers);
-          setSuggestionDismissed(checkins[0].suggestion_dismissed || false);
-        }
-
-        // 3. Fetch active treatment plan
+        // 2. Fetch active treatment plan
+        let initialPlan: TreatmentPlan | null = null;
         const { data: activePlans } = await supabase
           .from('treatment_plans')
           .select('*')
@@ -87,7 +74,8 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           .limit(1);
         
         if (activePlans && activePlans.length > 0) {
-          setActivePlan(activePlans[0]);
+          initialPlan = activePlans[0];
+          setActivePlan(initialPlan);
         } else {
           // Use user_profile.plan as baseline if available
           const { data: profile } = await supabase
@@ -97,16 +85,39 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
             .single();
           
           if (profile?.plan) {
-            setActivePlan({
+            initialPlan = {
               duration_min: profile.plan.duration_min || BASELINE_PLAN.duration_min,
               master_gain: profile.plan.master_gain || BASELINE_PLAN.master_gain,
               theta_beat_hz: profile.plan.frequency_hz || BASELINE_PLAN.theta_beat_hz,
               theta_gain: profile.plan.theta_gain || BASELINE_PLAN.theta_gain,
               fade_in_ms: profile.plan.fade_in_ms || BASELINE_PLAN.fade_in_ms,
               fade_out_ms: profile.plan.fade_out_ms || BASELINE_PLAN.fade_out_ms,
-            });
+            };
           } else {
-            setActivePlan(BASELINE_PLAN);
+            initialPlan = BASELINE_PLAN;
+          }
+          setActivePlan(initialPlan);
+        }
+
+        // 3. Fetch today's check-in
+        const { data: checkins } = await supabase
+          .from('daily_checkins')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('checkin_date', today)
+          .limit(1);
+
+        if (checkins && checkins.length > 0) {
+          const todayCheckin = checkins[0];
+          setExistingCheckin(todayCheckin);
+          setAnswers(todayCheckin.answers);
+          setSuggestionDismissed(todayCheckin.suggestion_dismissed || false);
+          
+          // Calculate suggestion on load if available and not dismissed
+          if (!todayCheckin.suggestion_dismissed && initialPlan) {
+            const score = calculateSleepScore(todayCheckin.answers);
+            const sug = generateTreatmentSuggestion(initialPlan, score);
+            setSuggestion(sug);
           }
         }
       } catch (err) {
