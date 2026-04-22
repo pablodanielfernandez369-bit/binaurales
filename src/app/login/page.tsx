@@ -147,7 +147,7 @@ export default function LoginPage() {
           <p>Acceso limitado exclusivamente a personal autorizado.</p>
           <p>Todos los accesos son monitoreados.</p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
