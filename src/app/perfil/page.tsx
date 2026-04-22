@@ -11,6 +11,7 @@ export default function ProfilePage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const router = useRouter();
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -60,6 +61,13 @@ export default function ProfilePage() {
     await supabase.from('user_profile').delete().eq('id', user.id);
     await supabase.from('sessions').delete().eq('user_id', user.id);
     router.push('/');
+  };
+
+  const handleDeleteSession = async () => {
+    if (!sessionToDelete) return;
+    await supabase.from('sessions').delete().eq('id', sessionToDelete);
+    setSessions((prev) => prev.filter((s) => s.id !== sessionToDelete));
+    setSessionToDelete(null);
   };
 
   if (loading) return <div className="flex min-h-screen items-center justify-center">Cargando perfil...</div>;
@@ -131,9 +139,17 @@ export default function ProfilePage() {
                       <p className="text-[10px] text-gray-500 uppercase">{session.duration_min} min • {session.frequency_hz} Hz</p>
                     </div>
                   </div>
-                  {session.completed && (
-                    <span className="text-[10px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full border border-green-500/20">Completada</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {session.completed && (
+                      <span className="text-[10px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full border border-green-500/20">Completada</span>
+                    )}
+                    <button
+                      onClick={() => setSessionToDelete(session.id)}
+                      className="p-2 rounded-xl bg-red-500/5 text-red-400 hover:bg-red-500/20 border border-red-500/10 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))
             ) : (
@@ -180,6 +196,20 @@ export default function ProfilePage() {
               >
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sessionToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0A0E1A]/90 backdrop-blur-md p-6">
+          <div className="bg-[#1A0A0A] border border-red-500/30 p-8 rounded-3xl text-center max-w-sm">
+            <Trash2 size={40} className="mx-auto text-red-500 mb-4" />
+            <h2 className="text-xl font-light text-white mb-2">¿Borrar esta sesión?</h2>
+            <p className="text-gray-400 mb-8 font-light text-sm">Esta acción es irreversible.</p>
+            <div className="flex flex-col gap-3">
+              <button onClick={handleDeleteSession} className="w-full py-3 rounded-xl bg-red-500 text-white font-medium text-sm">Sí, borrar</button>
+              <button onClick={() => setSessionToDelete(null)} className="w-full py-3 rounded-xl bg-white/5 text-white font-medium text-sm">Cancelar</button>
             </div>
           </div>
         </div>

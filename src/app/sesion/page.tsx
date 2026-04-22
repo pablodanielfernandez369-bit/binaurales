@@ -414,11 +414,7 @@ function SessionContent() {
                   </button>
                   
                   <button
-                    onClick={() => {
-                      stopAudio();
-                      setHasStarted(false);
-                      setTimeLeft(profile.plan.duration_min * 60);
-                    }}
+                    onClick={handleComplete}
                     className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10"
                   >
                     <Square size={20} />

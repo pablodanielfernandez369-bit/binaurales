@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { motion } from 'framer-motion';
-import { Activity, Calendar, CheckCircle2, Clock, Info, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Activity, Calendar, CheckCircle2, Clock, Info, TrendingUp, AlertTriangle, Trash2, Moon } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, isSameWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import SleepCheckin from '@/components/SleepCheckin';
@@ -33,6 +33,7 @@ export default function NeurologoPage() {
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -75,6 +76,13 @@ export default function NeurologoPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteSession = async () => {
+    if (!sessionToDelete) return;
+    await supabase.from('sessions').delete().eq('id', sessionToDelete);
+    setSessions((prev) => prev.filter((s) => s.id !== sessionToDelete));
+    setSessionToDelete(null);
   };
 
   useEffect(() => {
@@ -237,17 +245,50 @@ export default function NeurologoPage() {
         </div>
       </section>
 
-      {/* Diagnostic Tips */}
-      <section className="bg-emerald-500/5 border border-emerald-500/10 rounded-3xl p-6">
-        <div className="flex items-center gap-3 text-emerald-400 mb-2">
-          <Info size={18} />
-          <h3 className="text-sm font-medium tracking-wide uppercase">Nota de Ajuste</h3>
+      {/* Detailed Session History */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 text-gray-400">
+          <Activity size={20} />
+          <h2 className="text-lg font-medium tracking-tight">Historial Detallado</h2>
         </div>
-        <p className="text-gray-300 font-light text-sm leading-relaxed">
-          Si la tasa de completado cae por debajo del 70%, considere reducir la duración de las sesiones 
-          o ajustar la frecuencia base hacia ondas Delta (2-4Hz) para mejorar la tolerancia inicial.
-        </p>
+        
+        <div className="space-y-3">
+          {sessions.map((session) => (
+            <div key={session.id} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#1A1F2E] flex items-center justify-center text-gray-400">
+                  <Moon size={14} />
+                </div>
+                <div>
+                  <p className="text-sm text-white">{format(new Date(session.completed_at), "d 'de' MMMM, HH:mm", { locale: es })}</p>
+                  <p className="text-[10px] text-gray-500 uppercase">{session.duration_min} min • {session.frequency_hz} Hz</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSessionToDelete(session.id)}
+                className="p-2 rounded-xl bg-red-500/5 text-red-400 hover:bg-red-500/20 border border-red-500/10 transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
       </section>
+
+      {/* Confirmation Modal */}
+      {sessionToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0A0E1A]/90 backdrop-blur-md p-6">
+          <div className="bg-[#1A0A0A] border border-red-500/30 p-8 rounded-3xl text-center max-w-sm">
+            <Trash2 size={40} className="mx-auto text-red-500 mb-4" />
+            <h2 className="text-xl font-light text-white mb-2">¿Borrar esta sesión?</h2>
+            <p className="text-gray-400 mb-8 font-light text-sm">Esta acción es irreversible.</p>
+            <div className="flex flex-col gap-3">
+              <button onClick={handleDeleteSession} className="w-full py-3 rounded-xl bg-red-500 text-white font-medium text-sm">Sí, borrar</button>
+              <button onClick={() => setSessionToDelete(null)} className="w-full py-3 rounded-xl bg-white/5 text-white font-medium text-sm">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
