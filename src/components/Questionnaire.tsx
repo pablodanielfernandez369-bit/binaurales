@@ -1,278 +1,141 @@
 'use client';
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ChevronLeft, Moon, Brain, ShieldCheck } from 'lucide-react';
+import { ChevronLeft, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { generateDiagnostic, SleepPlan, QuestionnaireResponses } from '@/lib/diagnostic';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 const steps = [
-  {
-    id: 'sleep_hours',
-    question: '¿Cuántas horas dormís por noche en promedio?',
-    type: 'slider',
-    min: 3,
-    max: 10,
-    unit: 'hs',
-  },
-  {
-    id: 'sleep_latency',
-    question: '¿Cuánto tardás en dormirte?',
-    type: 'options',
-    options: ['menos de 15 min', '15-30 min', '30-60 min', 'más de 1 hora'],
-  },
-  {
-    id: 'wake_ups',
-    question: '¿Te despertás durante la noche?',
-    type: 'options',
-    options: ['nunca', '1-2 veces', '3 o más veces'],
-  },
-  {
-    id: 'sleep_quality',
-    question: '¿Cómo te sentís al despertar?',
-    type: 'options',
-    options: ['descansado', 'algo cansado', 'muy cansado'],
-  },
-  {
-    id: 'stress_level',
-    question: '¿Cuál es tu nivel de estrés general?',
-    type: 'slider',
-    min: 1,
-    max: 10,
-    unit: '',
-  },
-  {
-    id: 'racing_thoughts',
-    question: '¿Tenés pensamientos que no te dejan dormir?',
-    type: 'options',
-    options: ['casi nunca', 'a veces', 'frecuentemente', 'siempre'],
-  },
-  {
-    id: 'bedtime',
-    question: '¿A qué hora te vas a dormir habitualmente?',
-    type: 'time',
-  },
-  {
-    id: 'screen_time',
-    question: '¿Usás pantallas antes de dormir?',
-    type: 'options',
-    options: ['no', 'hasta 30 min antes', 'hasta 1 hora antes', 'más de 1 hora antes'],
-  },
+  // Bloque 1 — Patrón de sueño
+  { id: 'sleep_hours', block: 'Patrón de Sueño', question: '¿Cuántas horas dormís por noche en promedio?', type: 'slider', min: 3, max: 10, unit: 'hs' },
+  { id: 'sleep_latency', block: 'Patrón de Sueño', question: '¿Cuánto tardás en dormirte desde que apagás la luz?', type: 'options', options: ['menos de 15 min', '15-30 min', '30-60 min', 'más de 1 hora'] },
+  { id: 'wake_ups', block: 'Patrón de Sueño', question: '¿Cuántas veces te despertás durante la noche?', type: 'options', options: ['nunca', '1-2 veces', '3 o más veces'] },
+  { id: 'sleep_quality', block: 'Patrón de Sueño', question: '¿Cómo te sentís al despertar?', type: 'options', options: ['descansado', 'algo cansado', 'muy cansado', 'agotado aunque dormí'] },
+  // Bloque 2 — Estado mental
+  { id: 'racing_thoughts', block: 'Estado Mental', question: '¿Tenés pensamientos que no podés apagar al acostarte?', type: 'options', options: ['casi nunca', 'a veces', 'frecuentemente', 'siempre'] },
+  { id: 'anxiety_level', block: 'Estado Mental', question: '¿Sentís ansiedad o tensión antes de dormir?', type: 'options', options: ['no', 'leve', 'moderada', 'intensa'] },
+  { id: 'stress_level', block: 'Estado Mental', question: '¿Cuál es tu nivel de estrés general en la vida diaria?', type: 'slider', min: 1, max: 10, unit: '' },
+  // Bloque 3 — Síntomas físicos
+  { id: 'physical_tension', block: 'Síntomas Físicos', question: '¿Sentís tensión muscular o inquietud física al intentar dormir?', type: 'options', options: ['no', 'a veces', 'frecuentemente'] },
+  { id: 'screen_time', block: 'Síntomas Físicos', question: '¿Usás pantallas en la última hora antes de dormir?', type: 'options', options: ['no', 'a veces', 'sí, siempre'] },
+  // Bloque 4 — Objetivo
+  { id: 'main_goal', block: 'Tu Objetivo', question: '¿Qué resultado buscás principalmente?', type: 'options', options: ['dormir más profundo', 'apagar la mente', 'reducir ansiedad', 'descansar el cuerpo', 'mejorar calidad general'] },
 ];
 
 export default function Questionnaire() {
   const [currentStep, setCurrentStep] = useState(0);
-  const [responses, setResponses] = useState<Partial<QuestionnaireResponses>>({
-    sleep_hours: 7,
-    stress_level: 5,
-  });
+  const [responses, setResponses] = useState<Partial<QuestionnaireResponses>>({ sleep_hours: 7, stress_level: 5 });
   const [isCompleted, setIsCompleted] = useState(false);
   const [diagnostic, setDiagnostic] = useState<{ analysis: string; plan: SleepPlan } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   const handleNext = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      finishQuestionnaire();
-    }
+    if (currentStep < steps.length - 1) setCurrentStep(currentStep + 1);
+    else finishQuestionnaire();
   };
-
-  const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const updateResponse = (id: string, value: any) => {
-    setResponses((prev) => ({ ...prev, [id]: value }));
-  };
+  const handleBack = () => { if (currentStep > 0) setCurrentStep(currentStep - 1); };
+  const updateResponse = (id: string, value: any) => setResponses((prev) => ({ ...prev, [id]: value }));
 
   const finishQuestionnaire = async () => {
     const fullResponses = responses as QuestionnaireResponses;
     const result = generateDiagnostic(fullResponses);
     setDiagnostic(result);
     setIsCompleted(true);
-    
-    setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
       await supabase.from('user_profile').upsert(
-        { 
-          id: user.id, 
-          email: user.email, 
-          answers: fullResponses, 
-          plan: result.plan, 
-          created_at: new Date().toISOString() 
-        }, 
+        { id: user.id, email: user.email, answers: fullResponses, plan: result.plan, created_at: new Date().toISOString() },
         { onConflict: 'id' }
       );
+      setTimeout(() => { window.location.href = '/sesion'; }, 3500);
     } catch (error) {
       console.error('Error saving profile:', error);
       alert('Error al guardar tu perfil. Por favor intentá de nuevo.');
       setIsCompleted(false);
-      setIsSaving(false);
-    } finally {
-      setIsSaving(false);
     }
   };
 
   if (isCompleted && diagnostic) {
     return (
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full glass p-8 rounded-3xl"
-      >
-        <div className="flex justify-center mb-6">
-          <ShieldCheck className="w-16 h-16 text-accent" />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full p-8 rounded-3xl space-y-6">
+        <div className="flex justify-center">
+          <div className="w-20 h-20 rounded-full bg-[#7B9CFF]/10 flex items-center justify-center border border-[#7B9CFF]/20">
+            <ShieldCheck className="w-10 h-10 text-[#7B9CFF]" />
+          </div>
         </div>
-        <h2 className="text-2xl font-bold mb-4 text-center text-gradient">Diagnóstico del Neurólogo</h2>
-        <p className="text-zinc-300 mb-6 leading-relaxed italic text-center">
-          "{diagnostic.analysis}"
-        </p>
-        
-        <div className="bg-primary/20 p-6 rounded-2xl border border-primary/30 mb-8">
-          <h3 className="text-accent font-semibold mb-2">Plan Recomendado:</h3>
-          <ul className="space-y-2 text-sm text-zinc-200">
-            <li><span className="text-accent/60">Terapia:</span> Binaural de fase {diagnostic.plan.wave_type}</li>
-            <li><span className="text-accent/60">Frecuencia:</span> {diagnostic.plan.frequency_hz} Hz</li>
-            <li><span className="text-accent/60">Duración:</span> {diagnostic.plan.duration_min} minutos</li>
-            <li><span className="text-accent/60">Frecuencia semanal:</span> {diagnostic.plan.sessions_per_week === 'daily' ? 'Todas las noches' : `${diagnostic.plan.sessions_per_week} veces por semana`}</li>
-          </ul>
+        <div className="text-center space-y-2">
+          <p className="text-xs text-[#7B9CFF] uppercase tracking-widest">Diagnóstico del Neurólogo</p>
+          <h2 className="text-2xl font-light text-white">{diagnostic.plan.wave_type}</h2>
+          <p className="text-gray-400 font-light text-sm leading-relaxed">"{diagnostic.analysis}"</p>
         </div>
-
-        <button 
-          onClick={() => {
-            setIsSaving(true);
-            window.location.href = '/sesion';
-          }}
-          disabled={isSaving}
-          className="w-full py-4 bg-accent hover:bg-accent/90 text-background font-bold rounded-2xl transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2 group disabled:opacity-50"
-        >
-          {isSaving ? 'Iniciando...' : 'Comenzar mi primera sesión'}
-          <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-        </button>
+        <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-3">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Frecuencia</span>
+            <span className="text-[#7B9CFF] font-medium">{diagnostic.plan.frequency_hz} Hz</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Duración</span>
+            <span className="text-white">{diagnostic.plan.duration_min} minutos</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Protocolo</span>
+            <span className="text-white">{diagnostic.plan.wave_type}</span>
+          </div>
+        </div>
+        <p className="text-center text-xs text-gray-600">Iniciando sesión en unos segundos...</p>
       </motion.div>
     );
   }
 
   const step = steps[currentStep];
+  const progress = ((currentStep + 1) / steps.length) * 100;
 
   return (
-    <div className="max-w-md w-full px-6 py-12 flex flex-col items-center">
-      {/* Header */}
-      <div className="mb-12 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-primary/30 text-xs font-medium text-accent mb-4">
-          <Brain className="w-4 h-4" />
-          CONSULTA NEUROLÓGICA
+    <div className="max-w-md w-full px-6 py-10 flex flex-col">
+      {/* Barra de progreso */}
+      <div className="mb-8 space-y-2">
+        <div className="flex justify-between text-xs text-gray-600">
+          <span className="text-[#7B9CFF]">{step.block}</span>
+          <span>{currentStep + 1} / {steps.length}</span>
         </div>
-        <div className="w-full bg-zinc-800/50 h-1.5 rounded-full mb-2 overflow-hidden">
-          <motion.div 
-            className="h-full bg-accent"
-            initial={{ width: 0 }}
-            animate={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
-          />
+        <div className="w-full h-1 bg-white/5 rounded-full">
+          <motion.div className="h-1 bg-[#7B9CFF] rounded-full" animate={{ width: `${progress}%` }} transition={{ duration: 0.3 }} />
         </div>
-        <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Paso {currentStep + 1} de {steps.length}</span>
       </div>
 
-      {/* Question Content */}
-      <div className="w-full min-h-[300px] flex flex-col justify-center">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col gap-8"
-          >
-            <h2 className="text-2xl font-light text-center leading-tight">
-              {step.question}
-            </h2>
-
+      <AnimatePresence mode="wait">
+        <motion.div key={currentStep} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="flex-1">
+          <h2 className="text-xl font-light text-white mb-8 leading-snug">{step.question}</h2>
+          <div className="space-y-3">
             {step.type === 'slider' && (
-              <div className="flex flex-col gap-4">
-                <input 
-                  type="range" 
-                  min={step.min} 
-                  max={step.max} 
-                  value={(responses as any)[step.id]}
-                  onChange={(e) => updateResponse(step.id, parseInt(e.target.value))}
-                  className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
-                />
-                <div className="text-5xl font-bold text-center text-accent">
-                  {(responses as any)[step.id]}
-                  <span className="text-xl font-normal text-zinc-500 ml-1">{step.unit}</span>
+              <div className="space-y-4">
+                <p className="text-center text-4xl font-extralight text-[#7B9CFF]">
+                  {(responses as any)[step.id]}{step.unit}
+                </p>
+                <input type="range" min={step.min} max={step.max} value={(responses as any)[step.id]} onChange={(e) => updateResponse(step.id, parseInt(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg accent-[#7B9CFF]" />
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>{step.min}{step.unit}</span>
+                  <span>{step.max}{step.unit}</span>
                 </div>
               </div>
             )}
+            {step.type === 'options' && step.options?.map((option) => (
+              <button key={option} onClick={() => { updateResponse(step.id, option); setTimeout(handleNext, 250); }}
+                className={`w-full p-4 rounded-2xl text-left text-sm transition-all border ${(responses as any)[step.id] === option ? 'bg-[#7B9CFF] text-[#0A0E1A] border-[#7B9CFF] font-medium' : 'bg-white/5 border-white/5 text-gray-300 hover:border-white/20'}`}>
+                {option}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      </AnimatePresence>
 
-            {step.type === 'options' && (
-              <div className="grid gap-3">
-                {step.options?.map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => {
-                      updateResponse(step.id, option);
-                      setTimeout(handleNext, 300);
-                    }}
-                    className={cn(
-                      "w-full p-4 rounded-2xl text-left border transition-all text-sm",
-                      (responses as any)[step.id] === option
-                        ? "bg-accent text-background border-accent font-medium"
-                        : "bg-white/5 border-white/10 text-white hover:border-accent/40"
-                    )}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {step.type === 'time' && (
-              <div className="flex justify-center">
-                <input 
-                  type="time" 
-                  value={(responses as any)[step.id] || ''}
-                  onChange={(e) => updateResponse(step.id, e.target.value)}
-                  className="bg-zinc-800 text-white p-4 rounded-2xl border border-white/10 text-xl"
-                />
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Navigation */}
-      <div className="mt-auto w-full flex items-center justify-between pt-12">
-        <button 
-          onClick={handleBack}
-          disabled={currentStep === 0}
-          className={cn(
-            "p-4 rounded-2xl border border-white/10 text-white transition-opacity",
-            currentStep === 0 ? "opacity-0" : "opacity-100"
-          )}
-        >
-          <ChevronLeft className="w-6 h-6" />
+      <div className="flex items-center justify-between pt-10">
+        <button onClick={handleBack} className={`p-3 rounded-xl bg-white/5 text-gray-400 transition-opacity ${currentStep === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+          <ChevronLeft size={20} />
         </button>
-        
         {step.type !== 'options' && (
-          <button 
-            onClick={handleNext}
-            className="flex items-center gap-2 px-8 py-4 bg-accent text-background font-bold rounded-2xl transition-all"
-          >
-            Siguiente
-            <ChevronRight className="w-5 h-5" />
+          <button onClick={handleNext} className="px-8 py-3 bg-[#7B9CFF] text-[#0A0E1A] font-medium rounded-2xl text-sm">
+            {currentStep === steps.length - 1 ? 'Ver diagnóstico' : 'Siguiente'}
           </button>
         )}
       </div>

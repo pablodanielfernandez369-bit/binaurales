@@ -136,7 +136,7 @@ function SessionContent() {
         const plan = activePlans[0];
         currentPlan = {
           duration_min: plan.duration_min,
-          frequency_hz: plan.theta_beat_hz,
+          frequency_hz: plan.beat_hz,
           wave_type: 'Theta (Calibrado)',
           description: `Plan ajustado tras tu evaluación: ${plan.change_reason || ''}`,
           master_gain: plan.master_gain,

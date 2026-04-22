@@ -5,16 +5,16 @@
 export interface TreatmentPlan {
   duration_min: number;
   master_gain: number;
-  theta_beat_hz: number;
+  beat_hz: number;        // era theta_beat_hz
   theta_gain: number;
   fade_in_ms: number;
   fade_out_ms: number;
 }
 
 export const HARD_LIMITS = {
-  duration_min: { min: 10, max: 30 },
+  duration_min: { min: 10, max: 45 },
   master_gain: { min: 0.25, max: 0.60 },
-  theta_beat_hz: { min: 2, max: 7 },
+  beat_hz: { min: 1, max: 15 },   // rango ampliado para Delta→SMR
   theta_gain: { min: 0.05, max: 0.25 },
   fade_in_ms: { min: 50, max: 300 },
   fade_out_ms: { min: 50, max: 400 },
@@ -23,7 +23,7 @@ export const HARD_LIMITS = {
 export const BASELINE_PLAN: TreatmentPlan = {
   duration_min: 20,
   master_gain: 0.45,
-  theta_beat_hz: 4,
+  beat_hz: 4,
   theta_gain: 0.12,
   fade_in_ms: 150,
   fade_out_ms: 200,

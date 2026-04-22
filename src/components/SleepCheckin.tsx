@@ -91,7 +91,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
             initialPlan = {
               duration_min: profile.plan.duration_min || BASELINE_PLAN.duration_min,
               master_gain: profile.plan.master_gain || BASELINE_PLAN.master_gain,
-              theta_beat_hz: profile.plan.frequency_hz || BASELINE_PLAN.theta_beat_hz,
+              beat_hz: profile.plan.frequency_hz || BASELINE_PLAN.beat_hz,
               theta_gain: profile.plan.theta_gain || BASELINE_PLAN.theta_gain,
               fade_in_ms: profile.plan.fade_in_ms || BASELINE_PLAN.fade_in_ms,
               fade_out_ms: profile.plan.fade_out_ms || BASELINE_PLAN.fade_out_ms,
