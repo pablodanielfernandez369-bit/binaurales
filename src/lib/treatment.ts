@@ -105,8 +105,7 @@ export function generateTreatmentSuggestion(
     if (score <= -3 && currentPlan.theta_gain > HARD_LIMITS.theta_gain.min) {
       // Very bad night: reduce sensory load
       suggestedPlan.theta_gain = Number((Math.max(HARD_LIMITS.theta_gain.min, currentPlan.theta_gain - 0.02)).toFixed(2));
-      suggestedPlan.fade_in_ms = Math.min(HARD_LIMITS.fade_in_ms.max, currentPlan.fade_in_ms + 50);
-      reason = 'Noche difícil: reducción de carga sensorial y rampas más suaves.';
+      reason = 'Noche difícil: reducción de carga sensorial.';
       changedField = 'theta_gain';
     } else if (currentPlan.duration_min > HARD_LIMITS.duration_min.min) {
       suggestedPlan.duration_min = Math.max(HARD_LIMITS.duration_min.min, currentPlan.duration_min - 5);

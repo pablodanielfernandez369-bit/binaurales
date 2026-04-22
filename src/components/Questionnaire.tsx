@@ -151,11 +151,15 @@ export default function Questionnaire() {
         </div>
 
         <button 
-          onClick={() => window.location.href = '/sesion'}
-          className="w-full py-4 bg-accent hover:bg-accent/90 text-background font-bold rounded-2xl transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2"
+          onClick={() => {
+            setIsSaving(true);
+            window.location.href = '/sesion';
+          }}
+          disabled={isSaving}
+          className="w-full py-4 bg-accent hover:bg-accent/90 text-background font-bold rounded-2xl transition-all shadow-lg shadow-accent/20 flex items-center justify-center gap-2 group disabled:opacity-50"
         >
-          Comenzar mi primera sesión
-          <ChevronRight className="w-5 h-5" />
+          {isSaving ? 'Iniciando...' : 'Comenzar mi primera sesión'}
+          <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
       </motion.div>
     );

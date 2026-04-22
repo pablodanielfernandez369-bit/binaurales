@@ -12,18 +12,16 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    async function checkAuth() {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      
-      if (!authUser) {
-        // Not logged in -> Redirect to Login
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
         router.push('/login');
-        return;
+      } else if (session.user) {
+        checkProfile(session.user);
       }
+    });
 
+    async function checkProfile(authUser: any) {
       setUser(authUser);
-
-      // Logged in -> Check if profile exists
       const { data: profile } = await supabase
         .from('user_profile')
         .select('plan')
@@ -31,15 +29,22 @@ export default function Home() {
         .single();
 
       if (profile?.plan) {
-        // Has profile -> Go to session
         router.push('/sesion');
       } else {
-        // No profile -> Show Questionnaire
         setLoading(false);
       }
     }
-    
-    checkAuth();
+
+    // Initial check
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      if (!authUser) {
+        router.push('/login');
+      } else {
+        checkProfile(authUser);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
   if (loading) {
