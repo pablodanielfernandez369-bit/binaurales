@@ -143,10 +143,10 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p className="mt-8 text-center text-[10px] text-gray-600 uppercase tracking-widest leading-relaxed">
-          Acceso limitado exclusivamente a personal autorizado.<br/>
-          Todos los accesos son monitoreados.
-        </p>
+        <div className="mt-8 text-center text-[10px] text-gray-600 uppercase tracking-widest leading-relaxed">
+          <p>Acceso limitado exclusivamente a personal autorizado.</p>
+          <p>Todos los accesos son monitoreados.</p>
+        </div>
       </motion.div>
     </div>
   );
