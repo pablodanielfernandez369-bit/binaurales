@@ -56,7 +56,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           .select('*')
           .eq('user_id', user.id)
           .eq('completed', true)
-          .order('created_at', { ascending: false })
+          .order('completed_at', { ascending: false })
           .limit(1);
         
         if (sessionErr) {
@@ -271,7 +271,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
             </div>
             <div>
               <h3 className="text-white font-medium">Check-in completado</h3>
-              <p className="text-xs text-gray-400">Evaluación de la sesión del {format(new Date(lastSession?.started_at || Date.now()), "d 'de' MMMM", { locale: es })}</p>
+              <p className="text-xs text-gray-400">Evaluación de la sesión del {format(new Date(lastSession?.completed_at || Date.now()), "d 'de' MMMM", { locale: es })}</p>
             </div>
           </div>
           <button 
@@ -342,11 +342,11 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
         <div>
           <h2 className="text-xl font-light text-white">Check-in de sueño</h2>
-          <p className="text-sm text-gray-400 mt-1">Sobre tu sesión del {format(new Date(lastSession.started_at), "d 'de' MMMM", { locale: es })}</p>
+          <p className="text-sm text-gray-400 mt-1">Sobre tu sesión del {format(new Date(lastSession.completed_at), "d 'de' MMMM", { locale: es })}</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-blue-300 bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20">
           <Clock size={14} />
-          <span>{Math.round(lastSession.duration_seconds / 60)} min | {lastSession.frequency_hz}Hz</span>
+          <span>{lastSession.duration_min} min | {lastSession.frequency_hz}Hz</span>
         </div>
       </div>
 

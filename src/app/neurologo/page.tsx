@@ -11,9 +11,9 @@ import SleepCheckin from '@/components/SleepCheckin';
 
 interface Session {
   id: string;
-  started_at: string;
-  status: string;
-  duration_seconds: number;
+  completed_at: string;
+  completed: boolean;
+  duration_min: number;
   frequency_hz: number;
   symptoms_before: string;
   symptoms_after: string;
@@ -51,13 +51,14 @@ export default function NeurologoPage() {
         .from('sessions')
         .select('*')
         .eq('user_id', authUser.id)
-        .order('started_at', { ascending: false });
+        .eq('completed', true)
+        .order('completed_at', { ascending: false });
 
       if (dbError) {
         console.error('[Neurologo] Database Error:', dbError);
         // Specific message for missing columns (SQL common issue)
-        if (dbError.message.includes('started_at')) {
-          setError('Error de Esquema: La tabla sessions no tiene la columna started_at. Por favor, ejecuta el script SQL de migración.');
+        if (dbError.message.includes('completed_at')) {
+          setError('Error de Esquema: La tabla sessions no tiene la columna completed_at. Por favor, ejecuta el script SQL de migración.');
         } else {
           setError(`Error de Base de Datos: ${dbError.message}`);
         }
@@ -84,7 +85,7 @@ export default function NeurologoPage() {
     const statsMap = new Map<string, WeeklyStat>();
 
     data.forEach(session => {
-      const date = new Date(session.started_at);
+      const date = new Date(session.completed_at);
       const weekStart = startOfWeek(date, { weekStartsOn: 1 });
       const weekKey = weekStart.toISOString();
 
@@ -97,8 +98,8 @@ export default function NeurologoPage() {
       };
 
       current.sessionsCount++;
-      if (session.status === 'completed') current.completedCount++;
-      current.totalDuration += session.duration_seconds;
+      if (session.completed) current.completedCount++;
+      current.totalDuration += (session.duration_min * 60);
       current.avgFrequency += session.frequency_hz;
 
       statsMap.set(weekKey, current);
@@ -154,7 +155,7 @@ export default function NeurologoPage() {
   );
 
   const completionRate = totalSessions > 0 
-    ? Math.round((sessions.filter(s => s.status === 'completed').length / totalSessions) * 100) 
+    ? Math.round((sessions.filter(s => s.completed).length / totalSessions) * 100) 
     : 0;
 
   return (
@@ -182,7 +183,7 @@ export default function NeurologoPage() {
         <StatCard 
           icon={<Clock className="text-purple-400" />} 
           label="Tiempo Total" 
-          value={`${Math.round(sessions.reduce((acc, s) => acc + s.duration_seconds, 0) / 60)} min`} 
+          value={`${Math.round(sessions.reduce((acc, s) => acc + (s.duration_min * 60), 0) / 60)} min`} 
         />
       </div>
 
