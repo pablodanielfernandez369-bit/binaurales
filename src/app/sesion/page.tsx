@@ -37,6 +37,7 @@ function SessionContent() {
   
   // Logic Refs
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const completedRef = useRef(false);
 
   const stopAudio = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -77,6 +78,9 @@ function SessionContent() {
   }, []);
 
   const handleComplete = useCallback(async () => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    
     try {
       await stopAudio();
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -334,12 +338,13 @@ function SessionContent() {
       setLoading(false);
       
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
+        setTimeLeft(p => {
+          if (p <= 1) {
+            clearInterval(timerRef.current!);
             handleComplete();
             return 0;
           }
-          return prev - 1;
+          return p - 1;
         });
       }, 1000);
     }
