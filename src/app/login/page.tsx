@@ -42,9 +42,12 @@ export default function LoginPage() {
       } else {
         setStatus('error');
         
-        // Specific feedback for Outlook/Hotmail on 500 errors
+        // Specific feedback for errors
         const isOutlook = /@(outlook|hotmail|live|msn)\./i.test(email);
-        if (response.status === 500 && isOutlook) {
+        
+        if (response.status === 429) {
+          setMessage('Se alcanzó el límite de envío. Esperá ~1 hora o configurá SMTP (Resend/SendGrid).');
+        } else if (response.status === 500 && isOutlook) {
           setMessage('Parece que el proveedor Outlook está fallando. Probá con el Gmail autorizado.');
         } else if (response.status === 500) {
           setMessage('Error en el servidor. Revisá los logs de Supabase o intentá con otro mail.');

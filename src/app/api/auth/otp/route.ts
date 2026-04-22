@@ -84,7 +84,7 @@ export async function POST(request: Request) {
             name: authError.name
           } 
         } : {})
-      }, { status: 500 });
+      }, { status: (authError as any).status === 429 ? 429 : 500 });
     }
 
     return NextResponse.json({ success: true, message: 'Magic Link enviado con éxito.' });
