@@ -1,4 +1,5 @@
 'use client';
+// Version: 1.1.0 - Adaptive Multi-Wave Support
 
 import { useEffect, useState, useRef, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
