@@ -56,6 +56,27 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setStatus('error');
+      setMessage('Por favor, ingresa tu email para enviarte el link de recuperación.');
+      return;
+    }
+
+    setStatus('loading');
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/reset-password',
+      });
+      if (error) throw error;
+      setStatus('success');
+      setMessage('Email de recuperación enviado. Revisa tu bandeja de entrada.');
+    } catch (err: any) {
+      setStatus('error');
+      setMessage(err.message || 'Error al enviar el email de recuperación.');
+    }
+  };
+
   const renderContent = () => {
     if (status === 'success') {
       return (
@@ -64,7 +85,7 @@ export default function LoginPage() {
             <ShieldCheck size={32} />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-medium text-white">¡Cuenta Lista!</h2>
+            <h2 className="text-xl font-medium text-white">¡Link Enviado!</h2>
             <p className="text-gray-400 text-sm font-light leading-relaxed">
               {message}
             </p>
@@ -166,7 +187,10 @@ export default function LoginPage() {
           </div>
           
           {mode === 'signin' && (
-            <p className="text-center text-xs text-gray-500 font-light cursor-pointer hover:text-white transition-colors pt-2">
+            <p 
+              onClick={handleForgotPassword}
+              className="text-center text-xs text-gray-500 font-light cursor-pointer hover:text-white transition-colors pt-2"
+            >
               ¿Olvidaste tu contraseña?
             </p>
           )}
