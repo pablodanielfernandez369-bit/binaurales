@@ -16,6 +16,7 @@ function SessionContent() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [noiseVolume, setNoiseVolume] = useState(0.05);
   const [completed, setCompleted] = useState(false);
+  const [showPlanSelector, setShowPlanSelector] = useState(false);
   
   // Debug Flags
   const searchParams = useSearchParams();
@@ -167,6 +168,12 @@ function SessionContent() {
             fade_in_ms: profileData.plan.fade_in_ms || 150,
             fade_out_ms: profileData.plan.fade_out_ms || 200
           };
+          
+          if (profileData.questionnaire_mode === 'both' && profileData.plan_day) {
+            // Guardamos el perfil completo para tener acceso a plan_day en el selector
+            setProfile(profileData);
+            setShowPlanSelector(true);
+          }
         }
       }
 
@@ -175,7 +182,11 @@ function SessionContent() {
         return;
       }
 
-      setProfile({ plan: currentPlan });
+      // Si no estamos en modo "both" (o si no se activó el selector), seteamos el plan básico
+      if (!profile) {
+        setProfile({ plan: currentPlan });
+      }
+      
       setTimeLeft(currentPlan.duration_min * 60);
       setLoading(false);
     }
@@ -366,6 +377,57 @@ function SessionContent() {
   };
 
   if (loading) return <div className="flex min-h-screen items-center justify-center text-[#7B9CFF]">Sincronizando Ondas...</div>;
+
+  if (showPlanSelector && profile?.plan_day) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center px-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          className="w-full max-w-md space-y-6 text-center"
+        >
+          <div className="space-y-2 mb-8">
+            <p className="text-xs text-[#7B9CFF] uppercase tracking-widest">Plan Dual Premium</p>
+            <h2 className="text-3xl font-light text-white">¿Qué protocolo usás hoy?</h2>
+          </div>
+          
+          <button
+            onClick={() => { 
+              // profile ya tiene .plan por defecto
+              setTimeLeft(profile.plan.duration_min * 60); 
+              setShowPlanSelector(false); 
+            }}
+            className="w-full p-6 rounded-3xl bg-[#4B2C69]/10 border border-white/5 hover:border-[#7B9CFF]/30 transition-all text-left space-y-2 group"
+          >
+            <div className="flex items-center gap-2 text-[#7B9CFF] group-hover:scale-105 transition-transform">
+              <Moon size={18} />
+              <span className="text-sm font-medium uppercase tracking-wider">Protocolo Nocturno</span>
+            </div>
+            <p className="text-xs text-gray-500">{profile.plan.wave_type} · {profile.plan.frequency_hz} Hz · {profile.plan.ideal_time}</p>
+          </button>
+          
+          <button
+            onClick={() => {
+              setProfile((prev: any) => ({ ...prev, plan: prev.plan_day }));
+              setTimeLeft(profile.plan_day.duration_min * 60);
+              setShowPlanSelector(false);
+            }}
+            className="w-full p-6 rounded-3xl bg-amber-500/5 border border-amber-500/10 hover:border-amber-500/30 transition-all text-left space-y-2 group"
+          >
+            <div className="flex items-center gap-2 text-amber-400 group-hover:scale-105 transition-transform">
+              <Sun size={18} />
+              <span className="text-sm font-medium uppercase tracking-wider">Protocolo Diurno</span>
+            </div>
+            <p className="text-xs text-gray-500">{profile.plan_day.wave_type} · {profile.plan_day.frequency_hz} Hz · {profile.plan_day.ideal_time}</p>
+          </button>
+
+          <p className="text-[10px] text-gray-600 uppercase tracking-tighter pt-4">
+            Podés cambiar de protocolo al reiniciar la sesión
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6 pb-24 pt-12">

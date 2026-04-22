@@ -1,11 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ShieldCheck, Moon, Sun } from 'lucide-react';
+import { ChevronLeft, ShieldCheck, Moon, Sun, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { generateDiagnostic, generateDayDiagnostic, SleepPlan, QuestionnaireResponses, DayResponses } from '@/lib/diagnostic';
 
-// MODO NOCHE — Sueño e insomnio
 const nightSteps = [
   { id: 'sleep_hours', block: 'Patrón de Sueño', question: '¿Cuántas horas dormís por noche en promedio?', type: 'slider', min: 3, max: 10, unit: 'hs' },
   { id: 'sleep_latency', block: 'Patrón de Sueño', question: '¿Cuánto tardás en dormirte desde que apagás la luz?', type: 'options', options: ['menos de 15 min', '15-30 min', '30-60 min', 'más de 1 hora'] },
@@ -19,7 +18,6 @@ const nightSteps = [
   { id: 'main_goal', block: 'Tu Objetivo', question: '¿Qué resultado buscás principalmente?', type: 'options', options: ['dormir más profundo', 'apagar la mente', 'reducir ansiedad nocturna', 'descansar el cuerpo', 'mejorar calidad general del sueño'] },
 ];
 
-// MODO DÍA — Bienestar diurno
 const daySteps = [
   { id: 'energy_level', block: 'Estado General', question: '¿Cómo describirías tu nivel de energía durante el día?', type: 'options', options: ['alto y estable', 'irregular, con picos y caídas', 'bajo pero constante', 'muy bajo, me cuesta funcionar'] },
   { id: 'focus_quality', block: 'Estado General', question: '¿Cómo es tu capacidad de concentración?', type: 'options', options: ['buena, me concentro sin problemas', 'me distraigo con facilidad', 'me cuesta arrancar pero luego mejora', 'muy difícil mantener el foco'] },
@@ -30,53 +28,156 @@ const daySteps = [
   { id: 'day_goal', block: 'Tu Objetivo', question: '¿Qué buscás lograr con la sesión?', type: 'options', options: ['reducir ansiedad ahora', 'mejorar concentración', 'calmar el cuerpo', 'recuperar energía mental', 'desconectarme un momento'] },
 ];
 
-type Mode = 'select' | 'night' | 'day';
+type Mode = 'select' | 'night' | 'day' | 'both';
+type BothPhase = 'night' | 'night_result' | 'day' | 'day_result';
 
 export default function Questionnaire() {
   const [mode, setMode] = useState<Mode>('select');
+  const [bothPhase, setBothPhase] = useState<BothPhase>('night');
   const [currentStep, setCurrentStep] = useState(0);
   const [responses, setResponses] = useState<any>({ sleep_hours: 7, stress_level: 5, day_stress: 5 });
+  const [nightDiagnostic, setNightDiagnostic] = useState<{ analysis: string; plan: SleepPlan } | null>(null);
+  const [dayDiagnostic, setDayDiagnostic] = useState<{ analysis: string; plan: SleepPlan } | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [diagnostic, setDiagnostic] = useState<{ analysis: string; plan: SleepPlan } | null>(null);
 
-  const steps = mode === 'night' ? nightSteps : daySteps;
+  const activeSteps = (mode === 'both' ? bothPhase === 'night' || bothPhase === 'night_result' : mode === 'night')
+    ? nightSteps : daySteps;
 
   const handleNext = () => {
-    if (currentStep < steps.length - 1) setCurrentStep(currentStep + 1);
-    else finishQuestionnaire();
+    if (currentStep < activeSteps.length - 1) setCurrentStep(currentStep + 1);
+    else finishCurrentQuestionnaire();
   };
+
   const handleBack = () => {
     if (currentStep > 0) setCurrentStep(currentStep - 1);
+    else if (mode === 'both' && bothPhase === 'day') setBothPhase('night_result');
     else setMode('select');
   };
-  const updateResponse = (id: string, value: any) => setResponses((prev: any) => ({ ...prev, [id]: value }));
 
-  const finishQuestionnaire = async () => {
-    const result = mode === 'night'
-      ? generateDiagnostic(responses as QuestionnaireResponses)
-      : generateDayDiagnostic(responses as DayResponses);
+  const updateResponse = (id: string, value: any) =>
+    setResponses((prev: any) => ({ ...prev, [id]: value }));
 
-    setDiagnostic(result);
-    setIsCompleted(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  const finishCurrentQuestionnaire = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (mode === 'night') {
+      const result = generateDiagnostic(responses as QuestionnaireResponses);
+      setDiagnostic(result);
+      setIsCompleted(true);
       await supabase.from('user_profile').upsert(
-        { id: user.id, email: user.email, answers: responses, plan: result.plan, questionnaire_mode: mode, created_at: new Date().toISOString() },
+        { id: user.id, email: user.email, answers: responses, plan: result.plan, questionnaire_mode: 'night', created_at: new Date().toISOString() },
         { onConflict: 'id' }
       );
       setTimeout(() => { window.location.href = '/sesion'; }, 3500);
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      alert('Error al guardar tu perfil. Por favor intentá de nuevo.');
-      setIsCompleted(false);
+
+    } else if (mode === 'day') {
+      const result = generateDayDiagnostic(responses as DayResponses);
+      setDiagnostic(result);
+      setIsCompleted(true);
+      await supabase.from('user_profile').upsert(
+        { id: user.id, email: user.email, answers: responses, plan: result.plan, questionnaire_mode: 'day', created_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      );
+      setTimeout(() => { window.location.href = '/sesion'; }, 3500);
+
+    } else if (mode === 'both') {
+      if (bothPhase === 'night') {
+        const result = generateDiagnostic(responses as QuestionnaireResponses);
+        setNightDiagnostic(result);
+        setBothPhase('night_result');
+
+      } else if (bothPhase === 'day') {
+        const result = generateDayDiagnostic(responses as DayResponses);
+        setDayDiagnostic(result);
+        setBothPhase('day_result');
+
+        // Guardar ambos planes — nocturno como plan principal, diurno como plan_day
+        await supabase.from('user_profile').upsert(
+          {
+            id: user.id,
+            email: user.email,
+            answers: responses,
+            plan: nightDiagnostic!.plan,
+            plan_day: result.plan,
+            questionnaire_mode: 'both',
+            created_at: new Date().toISOString()
+          },
+          { onConflict: 'id' }
+        );
+      }
     }
   };
 
-  // Pantalla de resultado
+  // Resultado modo both — fase nocturna
+  if (mode === 'both' && bothPhase === 'night_result' && nightDiagnostic) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full p-8 space-y-6 mx-auto">
+        <div className="flex items-center gap-2 text-[#7B9CFF]">
+          <Moon size={16} />
+          <p className="text-xs uppercase tracking-widest">Diagnóstico Nocturno</p>
+        </div>
+        <h2 className="text-2xl font-light text-white">{nightDiagnostic.plan.wave_type}</h2>
+        <p className="text-gray-400 text-sm font-light leading-relaxed">"{nightDiagnostic.analysis}"</p>
+        <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-3">
+          <div className="flex justify-between text-sm"><span className="text-gray-500">Frecuencia</span><span className="text-[#7B9CFF]">{nightDiagnostic.plan.frequency_hz} Hz</span></div>
+          <div className="flex justify-between text-sm"><span className="text-gray-500">Momento ideal</span><span className="text-white">{nightDiagnostic.plan.ideal_time}</span></div>
+        </div>
+        <div className="pt-4 border-t border-white/5 space-y-3">
+          <p className="text-xs text-gray-500 text-center">Ahora completá el cuestionario diurno</p>
+          <button
+            onClick={() => { setBothPhase('day'); setCurrentStep(0); }}
+            className="w-full py-4 bg-amber-500 text-[#0A0E1A] rounded-2xl font-medium flex items-center justify-center gap-2 transition-transform active:scale-95"
+          >
+            <Sun size={18} /> Continuar con Protocolo Diurno
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Resultado modo both — fase diurna (final)
+  if (mode === 'both' && bothPhase === 'day_result' && nightDiagnostic && dayDiagnostic) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full p-8 space-y-6 mx-auto">
+        <div className="flex justify-center">
+          <div className="w-16 h-16 rounded-full bg-[#7B9CFF]/10 flex items-center justify-center border border-[#7B9CFF]/20">
+            <ShieldCheck className="w-8 h-8 text-[#7B9CFF]" />
+          </div>
+        </div>
+        <h2 className="text-xl font-light text-white text-center">Tus dos protocolos están listos</h2>
+
+        {/* Protocolo nocturno */}
+        <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-2">
+          <div className="flex items-center gap-2 text-[#7B9CFF] mb-2">
+            <Moon size={14} /><span className="text-xs uppercase tracking-widest">Nocturno</span>
+          </div>
+          <p className="text-white font-medium">{nightDiagnostic.plan.wave_type}</p>
+          <p className="text-xs text-gray-500">{nightDiagnostic.plan.frequency_hz} Hz · {nightDiagnostic.plan.ideal_time}</p>
+        </div>
+
+        {/* Protocolo diurno */}
+        <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-5 space-y-2">
+          <div className="flex items-center gap-2 text-amber-400 mb-2">
+            <Sun size={14} /><span className="text-xs uppercase tracking-widest">Diurno</span>
+          </div>
+          <p className="text-white font-medium">{dayDiagnostic.plan.wave_type}</p>
+          <p className="text-xs text-gray-500">{dayDiagnostic.plan.frequency_hz} Hz · {dayDiagnostic.plan.ideal_time}</p>
+        </div>
+
+        <button onClick={() => { window.location.href = '/sesion'; }}
+          className="w-full py-4 bg-[#7B9CFF] text-[#0A0E1A] rounded-2xl font-medium transition-transform active:scale-95">
+          Comenzar primera sesión
+        </button>
+      </motion.div>
+    );
+  }
+
+  // Resultado modo single
   if (isCompleted && diagnostic) {
     return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full p-8 rounded-3xl space-y-6">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full p-8 space-y-6 mx-auto">
         <div className="flex justify-center">
           <div className="w-20 h-20 rounded-full bg-[#7B9CFF]/10 flex items-center justify-center border border-[#7B9CFF]/20">
             <ShieldCheck className="w-10 h-10 text-[#7B9CFF]" />
@@ -88,87 +189,75 @@ export default function Questionnaire() {
           <p className="text-gray-400 font-light text-sm leading-relaxed">"{diagnostic.analysis}"</p>
         </div>
         <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Frecuencia</span>
-            <span className="text-[#7B9CFF] font-medium">{diagnostic.plan.frequency_hz} Hz</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Duración</span>
-            <span className="text-white">{diagnostic.plan.duration_min} minutos</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Momento ideal</span>
-            <span className="text-white">{diagnostic.plan.ideal_time}</span>
-          </div>
+          <div className="flex justify-between text-sm"><span className="text-gray-500">Frecuencia</span><span className="text-[#7B9CFF] font-medium">{diagnostic.plan.frequency_hz} Hz</span></div>
+          <div className="flex justify-between text-sm"><span className="text-gray-500">Duración</span><span className="text-white">{diagnostic.plan.duration_min} minutos</span></div>
+          <div className="flex justify-between text-sm"><span className="text-gray-500">Momento ideal</span><span className="text-white">{diagnostic.plan.ideal_time}</span></div>
         </div>
         <p className="text-center text-xs text-gray-600">Iniciando sesión en unos segundos...</p>
       </motion.div>
     );
   }
 
-  // Pantalla de selección de modo
+  // Pantalla de selección
   if (mode === 'select') {
     return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full px-6 py-10 space-y-8">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full px-6 py-10 space-y-8 mx-auto">
         <div className="text-center space-y-2">
           <p className="text-xs text-[#7B9CFF] uppercase tracking-widest">Evaluación Inicial</p>
           <h2 className="text-2xl font-light text-white leading-snug">¿Para qué momento del día es tu tratamiento?</h2>
-          <p className="text-gray-500 text-sm font-light">El protocolo se ajusta según tu objetivo y el momento en que usarás la sesión.</p>
+          <p className="text-gray-500 text-sm font-light">El protocolo se ajusta según tu objetivo.</p>
         </div>
-
         <div className="space-y-4">
-          {/* Modo Noche */}
           <button onClick={() => setMode('night')} className="w-full p-6 rounded-3xl bg-[#4B2C69]/10 border border-white/5 hover:border-[#7B9CFF]/30 transition-all text-left space-y-3 group">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#7B9CFF]/10 flex items-center justify-center text-[#7B9CFF] group-hover:bg-[#7B9CFF]/20 transition-all">
-                <Moon size={20} />
-              </div>
-              <div>
-                <p className="text-white font-medium text-sm">Protocolo Nocturno</p>
-                <p className="text-[#7B9CFF] text-xs">Delta · Theta · Alpha/Theta</p>
-              </div>
+              <div className="w-10 h-10 rounded-2xl bg-[#7B9CFF]/10 flex items-center justify-center text-[#7B9CFF] group-hover:bg-[#7B9CFF]/20 transition-all"><Moon size={20} /></div>
+              <div><p className="text-white font-medium text-sm">Protocolo Nocturno</p><p className="text-[#7B9CFF] text-xs">Delta · Theta · Alpha/Theta</p></div>
             </div>
-            <p className="text-gray-400 text-xs font-light leading-relaxed">
-              Para problemas de sueño, insomnio, pensamientos nocturnos, ansiedad al acostarse o calidad del descanso. Se escucha en la cama, antes o durante el proceso de dormir.
-            </p>
+            <p className="text-gray-400 text-xs font-light leading-relaxed">Insomnio, pensamientos nocturnos, ansiedad al acostarse o calidad del descanso.</p>
           </button>
 
-          {/* Modo Día */}
-          <button onClick={() => setMode('day')} className="w-full p-6 rounded-3xl bg-[#4B2C69]/10 border border-white/5 hover:border-[#7B9CFF]/30 transition-all text-left space-y-3 group">
+          <button onClick={() => setMode('day')} className="w-full p-6 rounded-3xl bg-[#4B2C69]/10 border border-white/5 hover:border-amber-500/20 transition-all text-left space-y-3 group">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-all">
-                <Sun size={20} />
-              </div>
-              <div>
-                <p className="text-white font-medium text-sm">Protocolo Diurno</p>
-                <p className="text-amber-400 text-xs">Alpha · SMR · Beta bajo</p>
-              </div>
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-all"><Sun size={20} /></div>
+              <div><p className="text-white font-medium text-sm">Protocolo Diurno</p><p className="text-amber-400 text-xs">Alpha · SMR · Beta bajo</p></div>
             </div>
-            <p className="text-gray-400 text-xs font-light leading-relaxed">
-              Para ansiedad diurna, falta de concentración, fatiga mental, estrés en el trabajo o necesidad de calmar el sistema nervioso durante el día. Se puede escuchar en cualquier momento.
-            </p>
+            <p className="text-gray-400 text-xs font-light leading-relaxed">Ansiedad diurna, falta de concentración, fatiga mental o estrés en el trabajo.</p>
+          </button>
+
+          <button onClick={() => { setMode('both'); setBothPhase('night'); setCurrentStep(0); }} className="w-full p-6 rounded-3xl bg-white/5 border border-white/5 hover:border-white/20 transition-all text-left space-y-3 group">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-white group-hover:bg-white/10 transition-all"><Sparkles size={20} /></div>
+              <div><p className="text-white font-medium text-sm">Ambos Protocolos</p><p className="text-gray-400 text-xs">Nocturno + Diurno</p></div>
+            </div>
+            <p className="text-gray-400 text-xs font-light leading-relaxed">Completás los dos cuestionarios y recibís un plan personalizado para el día y la noche.</p>
           </button>
         </div>
       </motion.div>
     );
   }
 
-  // Cuestionario
-  const step = steps[currentStep];
-  const progress = ((currentStep + 1) / steps.length) * 100;
+  // Cuestionario activo
+  const step = activeSteps[currentStep];
+  const progress = ((currentStep + 1) / activeSteps.length) * 100;
+  const isNightPhase = mode === 'night' || (mode === 'both' && bothPhase === 'night');
 
   return (
-    <div className="max-w-md w-full px-6 py-10 flex flex-col min-h-screen">
+    <div className="max-w-md w-full px-6 py-10 flex flex-col min-h-screen mx-auto">
       <div className="mb-8 space-y-2">
         <div className="flex justify-between text-xs text-gray-600">
-          <span className="text-[#7B9CFF] flex items-center gap-1">
-            {mode === 'night' ? <Moon size={12} /> : <Sun size={12} />}
+          <span className={`flex items-center gap-1 ${isNightPhase ? 'text-[#7B9CFF]' : 'text-amber-400'}`}>
+            {isNightPhase ? <Moon size={12} /> : <Sun size={12} />}
+            {mode === 'both' && <span className="mr-1">[{bothPhase === 'night' ? '1/2' : '2/2'}]</span>}
             {step.block}
           </span>
-          <span>{currentStep + 1} / {steps.length}</span>
+          <span>{currentStep + 1} / {activeSteps.length}</span>
         </div>
         <div className="w-full h-1 bg-white/5 rounded-full">
-          <motion.div className="h-1 bg-[#7B9CFF] rounded-full" animate={{ width: `${progress}%` }} transition={{ duration: 0.3 }} />
+          <motion.div
+            className={`h-1 rounded-full ${isNightPhase ? 'bg-[#7B9CFF]' : 'bg-amber-400'}`}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.3 }}
+          />
         </div>
       </div>
 
@@ -178,14 +267,8 @@ export default function Questionnaire() {
           <div className="space-y-3">
             {step.type === 'slider' && (
               <div className="space-y-4">
-                <p className="text-center text-4xl font-extralight text-[#7B9CFF]">
-                  {responses[step.id]}{step.unit}
-                </p>
+                <p className="text-center text-4xl font-extralight text-[#7B9CFF]">{responses[step.id]}{step.unit}</p>
                 <input type="range" min={step.min} max={step.max} value={responses[step.id]} onChange={(e) => updateResponse(step.id, parseInt(e.target.value))} className="w-full h-2 bg-white/10 rounded-lg accent-[#7B9CFF]" />
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>{step.min}{step.unit}</span>
-                  <span>{step.max}{step.unit}</span>
-                </div>
               </div>
             )}
             {step.type === 'options' && step.options?.map((option: string) => (
@@ -199,12 +282,10 @@ export default function Questionnaire() {
       </AnimatePresence>
 
       <div className="flex items-center justify-between pt-10">
-        <button onClick={handleBack} className="p-3 rounded-xl bg-white/5 text-gray-400">
-          <ChevronLeft size={20} />
-        </button>
+        <button onClick={handleBack} className="p-3 rounded-xl bg-white/5 text-gray-400 transition-transform active:scale-95"><ChevronLeft size={20} /></button>
         {step.type !== 'options' && (
-          <button onClick={handleNext} className="px-8 py-3 bg-[#7B9CFF] text-[#0A0E1A] font-medium rounded-2xl text-sm">
-            {currentStep === steps.length - 1 ? 'Ver diagnóstico' : 'Siguiente'}
+          <button onClick={handleNext} className="px-8 py-3 bg-[#7B9CFF] text-[#0A0E1A] font-medium rounded-2xl text-sm transition-transform active:scale-95">
+            {currentStep === activeSteps.length - 1 ? 'Ver diagnóstico' : 'Siguiente'}
           </button>
         )}
       </div>
