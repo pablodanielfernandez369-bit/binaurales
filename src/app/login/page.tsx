@@ -4,12 +4,16 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Send, Loader2, ShieldCheck, AlertCircle, Brain } from 'lucide-react';
 import { useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [isMounted, setIsMounted] = useState(false);
+
+  const searchParams = useSearchParams();
+  const isDebug = searchParams.get('debug') === '1';
 
   useEffect(() => {
     setIsMounted(true);
@@ -23,7 +27,7 @@ export default function LoginPage() {
     setMessage('');
 
     try {
-      const response = await fetch('/api/auth/otp', {
+      const response = await fetch(`/api/auth/otp${isDebug ? '?debug=1' : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
