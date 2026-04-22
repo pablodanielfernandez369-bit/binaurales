@@ -36,7 +36,21 @@ export default function LoginPage() {
         setMessage('¡Link enviado! Revisa tu email para entrar.');
       } else {
         setStatus('error');
-        setMessage(data.error || 'Error al intentar ingresar.');
+        
+        // Specific feedback for Outlook/Hotmail on 500 errors
+        const isOutlook = /@(outlook|hotmail|live|msn)\./i.test(email);
+        if (response.status === 500 && isOutlook) {
+          setMessage('Parece que el proveedor Outlook está fallando. Probá con el Gmail autorizado.');
+        } else if (response.status === 500) {
+          setMessage('Error en el servidor. Revisá los logs de Supabase o intentá con otro mail.');
+        } else {
+          setMessage(data.error || 'Error al intentar ingresar.');
+        }
+        
+        // Log debug info if present
+        if (data.authError) {
+          console.error('[debug] Auth Error:', data.authError);
+        }
       }
     } catch (err) {
       setStatus('error');

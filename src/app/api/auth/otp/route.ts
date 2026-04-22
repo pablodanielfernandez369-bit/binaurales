@@ -75,7 +75,10 @@ export async function POST(request: Request) {
 
     if (authError) {
       console.error('[otp] auth error:', authError);
-      return NextResponse.json({ error: 'Error al enviar el link de acceso.' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'Error al enviar el link de acceso.',
+        ...(isDebug ? { authError } : {})
+      }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'Magic Link enviado con éxito.' });
