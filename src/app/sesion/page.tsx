@@ -76,19 +76,40 @@ function SessionContent() {
   }, []);
 
   const handleComplete = useCallback(async () => {
-    await stopAudio();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      await stopAudio();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        alert('No se pudo encontrar el usuario. Asegúrate de estar logueado.');
+        return;
+      }
 
-    setCompleted(true);
-    await supabase.from('sessions').insert({
-      user_id: user.id,
-      duration_min: profile.plan.duration_min,
-      frequency_hz: profile.plan.frequency_hz,
-      noise_volume: noiseVolume,
-      completed: true,
-      completed_at: new Date().toISOString()
-    });
+      setCompleted(true);
+      
+      const sessionData = {
+        user_id: user.id,
+        duration_min: profile.plan.duration_min,
+        frequency_hz: profile.plan.frequency_hz,
+        noise_volume: noiseVolume,
+        completed: true,
+        completed_at: new Date().toISOString()
+      };
+
+      const { error: saveError } = await supabase
+        .from('sessions')
+        .insert(sessionData);
+
+      if (saveError) {
+        console.error('[Session] Error saving row:', saveError);
+        alert(`No se pudo guardar la sesión en la base de datos.\nError [${saveError.code}]: ${saveError.message}`);
+      } else {
+        console.log('[Session] Saved successfully');
+      }
+    } catch (err: any) {
+      console.error('[Session] Unexpected error:', err);
+      alert(`Ocurrió un error inesperado al finalizar: ${err.message || 'Error desconocido'}`);
+    }
   }, [profile, noiseVolume, stopAudio]);
 
   // 1. Profile Loading
