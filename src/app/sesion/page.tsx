@@ -136,8 +136,9 @@ function SessionContent() {
         const plan = activePlans[0];
         currentPlan = {
           duration_min: plan.duration_min,
-          frequency_hz: plan.beat_hz,
-          wave_type: 'Theta (Calibrado)',
+          frequency_hz: plan.beat_hz ?? plan.theta_beat_hz, // compatibilidad con campo viejo
+          wave_type: plan.wave_type || 'Calibrado',
+          wave_category: plan.wave_category || 'theta',
           description: `Plan ajustado tras tu evaluación: ${plan.change_reason || ''}`,
           master_gain: plan.master_gain,
           theta_gain: plan.theta_gain,
@@ -155,6 +156,7 @@ function SessionContent() {
         if (profileData?.plan) {
           currentPlan = {
             ...profileData.plan,
+            wave_category: profileData.plan.wave_category || 'theta',
             master_gain: profileData.plan.master_gain || 0.45,
             theta_gain: profileData.plan.theta_gain || 0.12,
             fade_in_ms: profileData.plan.fade_in_ms || 150,
@@ -202,32 +204,75 @@ function SessionContent() {
     const plan = profile.plan;
     const now = ctx.currentTime;
 
-    // --- Oscillators (Theta Fix) ---
+    // Frecuencia base según categoría de onda
+    // Delta y Theta usan portadora baja (100Hz) para mayor profundidad
+    // Alpha/SMR usan portadora media (200Hz) estándar
+    const getCarrierFreq = (category: string): number => {
+      switch (category) {
+        case 'delta': return 100;
+        case 'theta': return 150;
+        case 'alpha_theta': return 175;
+        case 'alpha': return 200;
+        case 'smr': return 200;
+        default: return 200;
+      }
+    };
+
+    // Ganancia del oscilador según onda (Delta más suave, SMR más marcado)
+    const getOscGain = (category: string): number => {
+      switch (category) {
+        case 'delta': return 0.08;
+        case 'theta': return 0.12;
+        case 'alpha_theta': return 0.10;
+        case 'alpha': return 0.11;
+        case 'smr': return 0.14;
+        default: return 0.12;
+      }
+    };
+
+    const carrierFreq = getCarrierFreq(plan.wave_category);
+    const beatFreq = plan.frequency_hz;
+    const oscGainValue = plan.theta_gain || getOscGain(plan.wave_category);
+
     const oscL = ctx.createOscillator();
     const oscR = ctx.createOscillator();
     const panL = ctx.createStereoPanner();
     const panR = ctx.createStereoPanner();
-    
-    // Using setTargetAtTime for smooth initial frequency set
-    oscL.frequency.setValueAtTime(200, now);
-    oscR.frequency.setValueAtTime(200 + plan.frequency_hz, now);
-    
+
+    oscL.frequency.setValueAtTime(carrierFreq, now);
+    oscR.frequency.setValueAtTime(carrierFreq + beatFreq, now);
+
     panL.pan.setValueAtTime(-1, now);
     panR.pan.setValueAtTime(1, now);
 
     if (!muteOsc) {
       const oscGain = ctx.createGain();
-      oscGain.gain.setValueAtTime(plan.theta_gain || 0.12, now);
-      
+      oscGain.gain.setValueAtTime(oscGainValue, now);
       oscL.connect(panL).connect(oscGain).connect(masterGainRef.current!);
       oscR.connect(panR).connect(oscGain).connect(masterGainRef.current!);
     }
+
     oscRef.current = { l: oscL, r: oscR };
 
-    // --- Infinite Noise (Worklet) ---
+    // Ruido de fondo adaptado por onda
+    // Delta: ruido marrón suave (más grave, más envolvente)
+    // SMR: ruido más bajo para no interferir con la frecuencia
     const noiseNode = new AudioWorkletNode(ctx, 'brown-noise-processor');
     const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(noiseVolume, now);
+    
+    // Si el usuario no tocó el slider, usar valor por defecto según onda
+    const defaultNoiseByCategory: Record<string, number> = {
+      delta: 0.08,
+      theta: 0.05,
+      alpha_theta: 0.04,
+      alpha: 0.04,
+      smr: 0.03,
+    };
+    const effectiveNoise = noiseVolume === 0.05 
+      ? (defaultNoiseByCategory[plan.wave_category] || 0.05)
+      : noiseVolume;
+
+    noiseGain.gain.setValueAtTime(effectiveNoise, now);
     noiseGainRef.current = noiseGain;
 
     if (!muteNoise) {
@@ -258,11 +303,12 @@ function SessionContent() {
     oscL.start(now);
     oscR.start(now);
 
-    // Final Fade-in Sequence
+    // Fade-in adaptado: Delta más lento, SMR más rápido
+    const fadeInSec = (plan.fade_in_ms || 150) / 1000;
     const masterGainGain = masterGainRef.current!.gain;
     masterGainGain.cancelScheduledValues(now);
     masterGainGain.setValueAtTime(0, now);
-    masterGainGain.linearRampToValueAtTime(plan.master_gain || 0.45, now + (plan.fade_in_ms / 1000));
+    masterGainGain.linearRampToValueAtTime(plan.master_gain || 0.45, now + fadeInSec);
   };
 
   const togglePlay = useCallback(async () => {
@@ -340,30 +386,23 @@ function SessionContent() {
                 </h1>
               </div>
 
-              <div className="bg-[#4B2C69]/10 border border-white/5 rounded-3xl p-8 space-y-6 text-left">
-                <div className="flex items-center gap-4 text-gray-300">
-                  <div className="w-10 h-10 rounded-xl bg-[#0A0E1A] flex items-center justify-center text-[#7B9CFF]">
-                    <Brain size={20} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">Frecuencia de Onda</p>
-                    <p className="text-sm font-medium">{profile.plan.wave_type} ({profile.plan.frequency_hz} Hz)</p>
-                  </div>
+              <div className="bg-[#4B2C69]/10 border border-white/5 rounded-3xl p-8 space-y-3 text-left">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Protocolo</span>
+                  <span className="text-[#7B9CFF] font-medium">{profile.plan.wave_type}</span>
                 </div>
-                
-                <div className="flex items-center gap-4 text-gray-300">
-                  <div className="w-10 h-10 rounded-xl bg-[#0A0E1A] flex items-center justify-center text-[#7B9CFF]">
-                    <Volume2 size={20} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">Duración Estimada</p>
-                    <p className="text-sm font-medium">{profile.plan.duration_min} Minutos</p>
-                  </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Frecuencia</span>
+                  <span className="text-white">{profile.plan.frequency_hz} Hz</span>
                 </div>
-
-                <p className="text-sm text-gray-400 font-light leading-relaxed border-t border-white/5 pt-4">
-                  Recomendación: Asegúrate de estar en un lugar tranquilo y usar auriculares para el efecto binaural.
-                </p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Duración</span>
+                  <span className="text-white">{profile.plan.duration_min} min</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Indicado para</span>
+                  <span className="text-white text-right text-xs max-w-[60%]">{profile.plan.description}</span>
+                </div>
               </div>
 
               <button
