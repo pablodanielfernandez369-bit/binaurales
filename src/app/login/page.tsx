@@ -35,9 +35,13 @@ export default function LoginPage() {
 
     try {
       if (mode === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error, data } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.push('/sesion');
+        if (data.session) {
+          router.push('/');
+        } else {
+          throw new Error('No se pudo iniciar sesión.');
+        }
       } else {
         const { error, data } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
