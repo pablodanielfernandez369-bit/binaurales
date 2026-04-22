@@ -38,7 +38,7 @@ export default function ProfilePage() {
         .select('*')
         .eq('user_id', user.id)
         .eq('completed', true)
-        .order('created_at', { ascending: false })
+        .order('completed_at', { ascending: false })
         .limit(5);
 
       if (profileData) setProfile(profileData);

@@ -191,7 +191,7 @@ export function generateDayDiagnostic(responses: DayResponses): { analysis: stri
   else if (day_goal === 'desconectarme un momento') alphaScore += 1;
 
   const scores = { alphaScore, smrScore, thetaScore };
-  const winner = Object.entries(scores).reduce((a, b) => (a[1] >= b[1] ? a : b))[0] as keyof typeof scores;
+  const winner = Object.entries(scores).reduce((a, b) => (a[1] > b[1] ? a : b))[0] as keyof typeof scores;
 
   let frequency_hz: number;
   let duration_min: number;

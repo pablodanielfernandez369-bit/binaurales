@@ -87,7 +87,7 @@ export default function NeurologoPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [router]);
 
   const processWeeklyStats = (data: Session[]) => {
     const statsMap = new Map<string, WeeklyStat>();

@@ -76,7 +76,7 @@ function SessionContent() {
     }
     
     setIsPlaying(false);
-  }, []);
+  }, [profile]);
 
   const handleComplete = useCallback(async () => {
     if (completedRef.current) return;
@@ -170,8 +170,8 @@ function SessionContent() {
           };
           
           if (profileData.questionnaire_mode === 'both' && profileData.plan_day) {
-            // Guardamos el perfil completo para tener acceso a plan_day en el selector
-            setProfile(profileData);
+            setProfile(profileData); 
+            setTimeLeft(profileData.plan.duration_min * 60); 
             setShowPlanSelector(true);
           }
         }
@@ -217,7 +217,7 @@ function SessionContent() {
 
   const startAudioGraph = async () => {
     const ctx = audioCtxRef.current!;
-    const plan = profile.plan;
+    const plan = profile.plan || profile; 
     const now = ctx.currentTime;
 
     // Frecuencia base según categoría de onda

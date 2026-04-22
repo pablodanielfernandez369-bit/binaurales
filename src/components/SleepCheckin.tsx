@@ -38,6 +38,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   const [submitting, setSubmitting] = useState(false);
   const [activePlan, setActivePlan] = useState<TreatmentPlan | null>(null);
   const [questionnaireMode, setQuestionnaireMode] = useState<'night' | 'day'>('night');
+  const [isBothMode, setIsBothMode] = useState(false);
   const [suggestion, setSuggestion] = useState<{ suggestedPlan: TreatmentPlan; reason: string; changedField: string } | null>(null);
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [answers, setAnswers] = useState<any>({});
@@ -61,8 +62,11 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           .eq('id', user.id)
           .single();
 
-        if (profile?.questionnaire_mode) {
-          setQuestionnaireMode(profile.questionnaire_mode);
+        if (profile?.questionnaire_mode === 'both') {
+          setIsBothMode(true);
+          setQuestionnaireMode('night');
+        } else if (profile?.questionnaire_mode) {
+          setQuestionnaireMode(profile.questionnaire_mode as 'night' | 'day');
         }
 
         // Última sesión completada
@@ -213,6 +217,23 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   const ModeIcon = questionnaireMode === 'night' ? Moon : Sun;
   const modeColor = questionnaireMode === 'night' ? 'text-[#7B9CFF]' : 'text-amber-400';
 
+  const ModeTabs = () => (
+    <div className="flex gap-2 p-1 bg-white/5 rounded-2xl mb-4">
+      <button 
+        onClick={() => setQuestionnaireMode('night')}
+        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'night' ? 'bg-[#7B9CFF] text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}
+      >
+        <Moon size={14} /> Noche
+      </button>
+      <button 
+        onClick={() => setQuestionnaireMode('day')}
+        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'day' ? 'bg-amber-400 text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}
+      >
+        <Sun size={14} /> Día
+      </button>
+    </div>
+  );
+
   // Check-in ya completado
   if (existingCheckin && !isEditing) {
     return (
@@ -286,6 +307,8 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   // Formulario de check-in
   return (
     <div className="bg-[#4B2C69]/10 border border-white/10 rounded-3xl p-6 space-y-6">
+      {isBothMode && <ModeTabs />}
+      
       <div className="flex items-center gap-2 border-b border-white/5 pb-4">
         <ModeIcon size={16} className={modeColor} />
         <h2 className="text-base font-light text-white">Seguimiento {modeLabel}</h2>
