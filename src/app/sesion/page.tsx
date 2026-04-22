@@ -46,11 +46,12 @@ function SessionContent() {
       const stopDuration = 0.08; // Slightly longer for safe zero-crossing
       
       // Strict Fade-out sequence
+      const fadeOutDuration = (profile?.plan?.fade_out_ms / 1000) || 0.08;
       masterGainRef.current.gain.cancelScheduledValues(now);
       masterGainRef.current.gain.setValueAtTime(masterGainRef.current.gain.value, now);
-      masterGainRef.current.gain.linearRampToValueAtTime(0, now + stopDuration);
+      masterGainRef.current.gain.linearRampToValueAtTime(0, now + fadeOutDuration);
 
-      const stopTime = now + stopDuration + 0.02;
+      const stopTime = now + fadeOutDuration + 0.02;
       
       if (oscRef.current) {
         oscRef.current.l.stop(stopTime);
@@ -99,22 +100,54 @@ function SessionContent() {
         return;
       }
 
-      const { data: profileData } = await supabase
-        .from('user_profile')
+      // 1. Fetch active treatment plan (Dynamic)
+      const { data: activePlans } = await supabase
+        .from('treatment_plans')
         .select('*')
-        .eq('id', authUser.id)
-        .single();
-      
-      if (!profileData) {
+        .eq('user_id', authUser.id)
+        .eq('is_active', true)
+        .limit(1);
+
+      let currentPlan: any = null;
+
+      if (activePlans && activePlans.length > 0) {
+        const plan = activePlans[0];
+        currentPlan = {
+          duration_min: plan.duration_min,
+          frequency_hz: plan.theta_beat_hz,
+          wave_type: 'Theta (Calibrado)',
+          description: `Plan ajustado tras tu evaluación: ${plan.change_reason || ''}`,
+          master_gain: plan.master_gain,
+          theta_gain: plan.theta_gain,
+          fade_in_ms: plan.fade_in_ms,
+          fade_out_ms: plan.fade_out_ms
+        };
+      } else {
+        // Fallback to user_profile.plan
+        const { data: profileData } = await supabase
+          .from('user_profile')
+          .select('*')
+          .eq('id', authUser.id)
+          .single();
+        
+        if (profileData?.plan) {
+          currentPlan = {
+            ...profileData.plan,
+            master_gain: profileData.plan.master_gain || 0.45,
+            theta_gain: profileData.plan.theta_gain || 0.12,
+            fade_in_ms: profileData.plan.fade_in_ms || 150,
+            fade_out_ms: profileData.plan.fade_out_ms || 200
+          };
+        }
+      }
+
+      if (!currentPlan) {
         router.push('/');
         return;
       }
 
-      setProfile(profileData);
-      setTimeLeft(profileData.plan.duration_min * 60);
-      if (profileData.noise_volume !== undefined) {
-        setNoiseVolume(profileData.noise_volume);
-      }
+      setProfile({ plan: currentPlan });
+      setTimeLeft(currentPlan.duration_min * 60);
       setLoading(false);
     }
     init();
@@ -161,8 +194,11 @@ function SessionContent() {
     panR.pan.setValueAtTime(1, now);
 
     if (!muteOsc) {
-      oscL.connect(panL).connect(masterGainRef.current!);
-      oscR.connect(panR).connect(masterGainRef.current!);
+      const oscGain = ctx.createGain();
+      oscGain.gain.setValueAtTime(plan.theta_gain || 0.12, now);
+      
+      oscL.connect(panL).connect(oscGain).connect(masterGainRef.current!);
+      oscR.connect(panR).connect(oscGain).connect(masterGainRef.current!);
     }
     oscRef.current = { l: oscL, r: oscR };
 
@@ -204,7 +240,7 @@ function SessionContent() {
     const masterGainGain = masterGainRef.current!.gain;
     masterGainGain.cancelScheduledValues(now);
     masterGainGain.setValueAtTime(0, now);
-    masterGainGain.linearRampToValueAtTime(0.5, now + 0.15);
+    masterGainGain.linearRampToValueAtTime(plan.master_gain || 0.45, now + (plan.fade_in_ms / 1000));
   };
 
   const togglePlay = useCallback(async () => {
