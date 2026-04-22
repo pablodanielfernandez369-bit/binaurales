@@ -247,20 +247,21 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
 
   if (existingCheckin && !isEditing) {
     return (
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-emerald-500/5 border border-emerald-500/20 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4"
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <CheckCircle2 size={24} />
+      <div className="space-y-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-emerald-500/5 border border-emerald-500/20 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <CheckCircle2 size={24} />
+            </div>
+            <div>
+              <h3 className="text-white font-medium">Check-in completado</h3>
+              <p className="text-xs text-gray-400">Evaluación de la sesión del {format(new Date(lastSession?.started_at || Date.now()), "d 'de' MMMM", { locale: es })}</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-white font-medium">Check-in completado</h3>
-            <p className="text-xs text-gray-400">Evaluación de la sesión del {format(new Date(lastSession?.started_at || Date.now()), "d 'de' MMMM", { locale: es })}</p>
-          </div>
-        </div>
           <button 
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white text-sm hover:bg-white/10 transition-colors"
@@ -268,13 +269,13 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
             <Edit3 size={16} />
             Editar
           </button>
-        </div>
+        </motion.div>
 
         {suggestion && !suggestionDismissed && !isEditing && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="mt-6 bg-[#7B9CFF]/10 border border-[#7B9CFF]/30 rounded-2xl p-5 space-y-4"
+            className="bg-[#7B9CFF]/10 border border-[#7B9CFF]/30 rounded-2xl p-5 space-y-4"
           >
             <div className="flex items-center gap-2 text-[#7B9CFF]">
               <Sparkles size={18} />
@@ -320,7 +321,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
             </div>
           </motion.div>
         )}
-      </motion.div>
+      </div>
     );
   }
 
