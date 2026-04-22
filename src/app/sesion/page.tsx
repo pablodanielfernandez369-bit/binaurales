@@ -86,7 +86,8 @@ function SessionContent() {
       duration_min: profile.plan.duration_min,
       frequency_hz: profile.plan.frequency_hz,
       noise_volume: noiseVolume,
-      completed: true
+      completed: true,
+      completed_at: new Date().toISOString()
     });
   }, [profile, noiseVolume, stopAudio]);
 

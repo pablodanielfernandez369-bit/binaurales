@@ -36,6 +36,7 @@ export default function ProfilePage() {
         .from('sessions')
         .select('*')
         .eq('user_id', user.id)
+        .eq('completed', true)
         .order('created_at', { ascending: false })
         .limit(5);
 

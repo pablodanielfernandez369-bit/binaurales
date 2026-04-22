@@ -51,14 +51,17 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
 
         const today = getARDate();
 
-        // 1. Fetch last COMPLETED session
-        const { data: sessions } = await supabase
+        const { data: sessions, error: sessionErr } = await supabase
           .from('sessions')
           .select('*')
           .eq('user_id', user.id)
-          .eq('status', 'completed')
-          .order('started_at', { ascending: false })
+          .eq('completed', true)
+          .order('created_at', { ascending: false })
           .limit(1);
+        
+        if (sessionErr) {
+          console.error('[SleepCheckin] Error fetching session:', sessionErr);
+        }
 
         if (sessions && sessions.length > 0) {
           setLastSession(sessions[0]);
@@ -131,23 +134,28 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   }, []);
 
   const handleSubmit = async () => {
-    if (!currentUser || submitting) return;
-    
     setSubmitting(true);
-    const today = getARDate();
-    
-    const payload = {
-      user_id: currentUser.id,
-      checkin_date: today,
-      session_id: lastSession?.id || null,
-      answers: answers,
-      updated_at: new Date().toISOString()
-    };
-
     try {
-      // Use upsert to handle both insert and update atomically
-      // onConflict handles the UNIQUE(user_id, checkin_date) constraint
-      const { data, error } = await supabase
+      // 1. Fetch fresh authentication data directly
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (!user || authError) {
+        alert('Sesión expirada o no encontrada. Por favor, vuelve a iniciar sesión.');
+        setSubmitting(false);
+        return;
+      }
+
+      const today = getARDate();
+      const payload = {
+        user_id: user.id,
+        checkin_date: today,
+        session_id: lastSession?.id || null,
+        answers: answers,
+        updated_at: new Date().toISOString()
+      };
+
+      // 2. Perform the upsert with detailed error checking
+      const { data, error: upsertError } = await supabase
         .from('daily_checkins')
         .upsert(payload, { 
           onConflict: 'user_id,checkin_date',
@@ -156,7 +164,11 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
         .select()
         .single();
 
-      if (error) throw error;
+      if (upsertError) {
+        console.error('[SleepCheckin] Upsert Error Details:', upsertError);
+        alert(`Error [${upsertError.code}]: ${upsertError.message}`);
+        return; // Keep form data in UI
+      }
       
       if (data) {
         setExistingCheckin(data);
@@ -174,8 +186,8 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
         if (onComplete) onComplete();
       }
     } catch (err: any) {
-      console.error('[SleepCheckin] Error saving:', err);
-      alert(`No se pudo guardar el check-in: ${err.message || 'Error desconocido'}`);
+      console.error('[SleepCheckin] Fatal Error during save:', err);
+      alert(`Error inesperado: ${err.message || 'Error desconocido'}`);
     } finally {
       setSubmitting(false);
     }
