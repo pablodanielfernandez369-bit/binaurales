@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { User, Activity, Trash2, ChevronRight, Moon, Brain, ShieldAlert } from 'lucide-react';
+import { User, Activity, Trash2, ChevronRight, Moon, Sun, Brain, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function ProfilePage() {
@@ -120,12 +120,40 @@ export default function ProfilePage() {
 
         {/* Stats / History */}
         <section>
-          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 text-gray-400">
               <Activity size={18} />
               <h2 className="text-sm font-medium uppercase tracking-wider">Sesiones Recientes</h2>
             </div>
           </div>
+
+          {/* Contador por protocolo */}
+          {profile?.questionnaire_mode === 'both' ? (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-4">
+                <div className="flex items-center gap-2 text-[#7B9CFF] mb-1">
+                  <Moon size={12} />
+                  <p className="text-[10px] uppercase tracking-widest">Nocturnas</p>
+                </div>
+                <p className="text-xl font-light text-white">
+                  {sessions.filter(s => s.frequency_hz < 13).length}
+                </p>
+              </div>
+              <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4">
+                <div className="flex items-center gap-2 text-amber-400 mb-1">
+                  <Sun size={12} />
+                  <p className="text-[10px] uppercase tracking-widest">Diurnas</p>
+                </div>
+                <p className="text-xl font-light text-white">
+                  {sessions.filter(s => s.frequency_hz >= 13).length}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-4 mb-4">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest">Total sesiones</p>
+              <p className="text-xl font-light text-white">{sessions.length}</p>
+            </div>
+          )}
           <div className="space-y-3">
             {sessions.length > 0 ? (
               sessions.map((session) => (

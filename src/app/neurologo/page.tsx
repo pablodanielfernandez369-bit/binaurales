@@ -1,290 +1,265 @@
 'use client';
-
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { motion } from 'framer-motion';
-import { Activity, Calendar, CheckCircle2, Clock, Info, TrendingUp, AlertTriangle, Trash2, Moon } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, isSameWeek } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Activity, Calendar, Clock, Trash2, Moon, Sun, Brain, TrendingUp, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import SleepCheckin from '@/components/SleepCheckin';
 
-interface Session {
-  id: string;
-  completed_at: string;
-  completed: boolean;
-  duration_min: number;
-  frequency_hz: number;
-  symptoms_before: string;
-  symptoms_after: string;
-}
-
-interface WeeklyStat {
-  weekStart: Date;
-  sessionsCount: number;
-  completedCount: number;
-  totalDuration: number;
-  avgFrequency: number;
-}
-
 export default function NeurologoPage() {
-  const router = useRouter();
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [weeklyStats, setWeeklyStats] = useState<WeeklyStat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [showDiagnostico, setShowDiagnostico] = useState(false);
+  const [dailyDiagnostic, setDailyDiagnostic] = useState<any>(null);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-      // Required: Get real user
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      
-      if (!authUser) {
-        router.push('/login');
-        return;
-      }
+    const { data: prof } = await supabase
+      .from('user_profile')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    setProfile(prof);
 
-      const { data: sessionData, error: dbError } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .eq('completed', true)
-        .order('completed_at', { ascending: false });
+    const { data: sess } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('completed', true)
+      .order('completed_at', { ascending: false });
+    setSessions(sess || []);
 
-      if (dbError) {
-        console.error('[Neurologo] Database Error:', dbError);
-        // Specific message for missing columns (SQL common issue)
-        if (dbError.message.includes('completed_at')) {
-          setError('Error de Esquema: La tabla sessions no tiene la columna completed_at. Por favor, ejecuta el script SQL de migración.');
-        } else {
-          setError(`Error de Base de Datos: ${dbError.message}`);
-        }
-        return;
-      }
-
-      if (sessionData) {
-        setSessions(sessionData);
-        processWeeklyStats(sessionData);
-      }
-    } catch (err) {
-      console.error('[Neurologo] Unexpected error:', err);
-      setError('Ocurrió un error inesperado al conectar con el servidor.');
-    } finally {
-      setLoading(false);
+    // Buscar check-in de hoy para diagnóstico diario
+    const today = Intl.DateTimeFormat('en-CA', { 
+      timeZone: 'America/Argentina/Buenos_Aires' 
+    }).format(new Date());
+    const { data: checkin } = await supabase
+      .from('daily_checkins')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('checkin_date', today)
+      .limit(1);
+    if (checkin && checkin.length > 0) {
+      setDailyDiagnostic(generateDailyDiagnostic(checkin[0]));
     }
+
+    setLoading(false);
   };
 
   const handleDeleteSession = async () => {
     if (!sessionToDelete) return;
     await supabase.from('sessions').delete().eq('id', sessionToDelete);
-    setSessions((prev) => prev.filter((s) => s.id !== sessionToDelete));
+    setSessions(prev => prev.filter(s => s.id !== sessionToDelete));
     setSessionToDelete(null);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [router]);
-
-  const processWeeklyStats = (data: Session[]) => {
-    const statsMap = new Map<string, WeeklyStat>();
-
-    data.forEach(session => {
-      const date = new Date(session.completed_at);
-      const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-      const weekKey = weekStart.toISOString();
-
-      const current = statsMap.get(weekKey) || {
-        weekStart,
-        sessionsCount: 0,
-        completedCount: 0,
-        totalDuration: 0,
-        avgFrequency: 0
-      };
-
-      current.sessionsCount++;
-      if (session.completed) current.completedCount++;
-      current.totalDuration += (session.duration_min * 60);
-      current.avgFrequency += session.frequency_hz;
-
-      statsMap.set(weekKey, current);
-    });
-
-    const sortedStats = Array.from(statsMap.values()).sort((a, b) => b.weekStart.getTime() - a.weekStart.getTime());
-    setWeeklyStats(sortedStats);
-  };
+  // Separar sesiones por protocolo
+  const isBothMode = profile?.questionnaire_mode === 'both';
+  const nightSessions = sessions.filter(s => {
+    if (!isBothMode) return true;
+    const hz = s.frequency_hz;
+    return hz <= 13; // nocturno: Delta, Theta, Alpha/Theta, Alpha
+  });
+  const daySessions = sessions.filter(s => {
+    if (!isBothMode) return false;
+    return s.frequency_hz >= 10 && s.frequency_hz <= 15; // SMR y Alpha diurno
+  });
 
   if (loading) return (
-    <div className="flex min-h-screen flex-col items-center justify-center space-y-4">
-      <div className="w-8 h-8 border-4 border-[#7B9CFF] border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-[#7B9CFF] font-light animate-pulse">Cargando datos clínicos...</p>
+    <div className="flex min-h-screen items-center justify-center text-[#7B9CFF]">
+      Cargando Panel Clínico...
     </div>
   );
-
-  if (error) return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center space-y-6">
-      <div className="w-16 h-16 rounded-3xl bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/20">
-        <AlertTriangle size={32} />
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-xl font-light text-white">Oops, algo salió mal</h2>
-        <p className="text-gray-400 font-light max-w-xs">{error}</p>
-      </div>
-      <button 
-        onClick={() => window.location.reload()}
-        className="px-8 py-3 rounded-2xl bg-white/5 text-white border border-white/10 hover:bg-white/10 transition-colors"
-      >
-        Reintentar
-      </button>
-    </div>
-  );
-
-  const totalSessions = sessions.length;
-
-  if (totalSessions === 0) return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center space-y-6">
-      <div className="w-16 h-16 rounded-3xl bg-[#7B9CFF]/10 flex items-center justify-center text-[#7B9CFF] border border-[#7B9CFF]/20">
-        <Activity size={32} />
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-xl font-light text-white">Sin Registro Clínico</h2>
-        <p className="text-gray-400 font-light max-w-xs">Todavía no hay sesiones registradas en tu historial.</p>
-      </div>
-      <button 
-        onClick={() => router.push('/sesion')}
-        className="px-8 py-3 rounded-2xl bg-[#7B9CFF] text-[#0A0E1A] font-medium"
-      >
-        Comenzar Primera Sesión
-      </button>
-    </div>
-  );
-
-  const completionRate = totalSessions > 0 
-    ? Math.round((sessions.filter(s => s.completed).length / totalSessions) * 100) 
-    : 0;
 
   return (
-    <div className="flex min-h-screen flex-col px-6 pt-12 pb-24 max-w-4xl mx-auto space-y-10">
+    <div className="flex min-h-screen flex-col px-6 pt-12 pb-24 max-w-4xl mx-auto space-y-8">
       <header>
-        <h1 className="text-3xl font-light text-white mb-2">Panel de Diagnóstico</h1>
-        <p className="text-gray-400 font-light">Seguimiento clínico y ajustes de tratamiento.</p>
+        <h1 className="text-3xl font-light text-white">Panel Clínico</h1>
+        <p className="text-gray-500 text-sm mt-1">Seguimiento y evolución de tu tratamiento.</p>
       </header>
 
-      {/* Sleep Check-in Section */}
-      <SleepCheckin />
+      {/* Check-in */}
+      <SleepCheckin onComplete={fetchData} />
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-          icon={<Activity className="text-blue-400" />} 
-          label="Total Sesiones" 
-          value={totalSessions.toString()} 
-        />
-        <StatCard 
-          icon={<CheckCircle2 className="text-emerald-400" />} 
-          label="Tasa Completado" 
-          value={`${completionRate}%`} 
-        />
-        <StatCard 
-          icon={<Clock className="text-purple-400" />} 
-          label="Tiempo Total" 
-          value={`${Math.round(sessions.reduce((acc, s) => acc + (s.duration_min * 60), 0) / 60)} min`} 
-        />
+      {/* Diagnóstico Diario */}
+      {dailyDiagnostic && (
+        <div className="space-y-3">
+          <button
+            onClick={() => setShowDiagnostico(!showDiagnostico)}
+            className="w-full flex items-center justify-between p-5 bg-[#4B2C69]/10 border border-[#7B9CFF]/20 rounded-2xl hover:border-[#7B9CFF]/40 transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#7B9CFF]/10 flex items-center justify-center text-[#7B9CFF]">
+                <Brain size={20} />
+              </div>
+              <div className="text-left">
+                <p className="text-white text-sm font-medium">Diagnóstico Clínico Diario</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">
+                  Basado en tu check-in de hoy
+                </p>
+              </div>
+            </div>
+            <motion.div animate={{ rotate: showDiagnostico ? 180 : 0 }}>
+              <TrendingUp size={16} className="text-[#7B9CFF]" />
+            </motion.div>
+          </button>
+
+          <AnimatePresence>
+            {showDiagnostico && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-6 space-y-4">
+                  {/* Estado general */}
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${
+                      dailyDiagnostic.status === 'improving' ? 'bg-emerald-400' :
+                      dailyDiagnostic.status === 'stable' ? 'bg-[#7B9CFF]' : 'bg-amber-400'
+                    }`} />
+                    <p className="text-white font-medium text-sm">{dailyDiagnostic.statusLabel}</p>
+                  </div>
+
+                  {/* Análisis */}
+                  <p className="text-gray-400 text-sm font-light leading-relaxed">
+                    {dailyDiagnostic.analysis}
+                  </p>
+
+                  {/* Métricas */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {dailyDiagnostic.metrics.map((m: any) => (
+                      <div key={m.label} className="bg-[#0A0E1A]/40 rounded-xl p-3">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-widest">{m.label}</p>
+                        <p className={`text-sm font-medium mt-1 ${m.color}`}>{m.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Recomendación */}
+                  {dailyDiagnostic.recommendation && (
+                    <div className="bg-[#7B9CFF]/5 border border-[#7B9CFF]/20 rounded-xl p-4">
+                      <div className="flex items-center gap-2 text-[#7B9CFF] mb-2">
+                        <Sparkles size={14} />
+                        <p className="text-xs font-medium uppercase tracking-widest">Recomendación</p>
+                      </div>
+                      <p className="text-gray-300 text-xs leading-relaxed">{dailyDiagnostic.recommendation}</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Estadísticas de sesiones */}
+      <div className={`grid gap-4 ${isBothMode ? 'grid-cols-2' : 'grid-cols-3'}`}>
+        {isBothMode ? (
+          <>
+            <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-2">
+              <div className="flex items-center gap-2 text-[#7B9CFF]">
+                <Moon size={14} />
+                <p className="text-[10px] uppercase tracking-widest">Sesiones Nocturnas</p>
+              </div>
+              <p className="text-2xl font-light text-white">{nightSessions.length}</p>
+              <p className="text-xs text-gray-500">
+                {nightSessions.reduce((a, s) => a + (s.duration_min || 0), 0)} min totales
+              </p>
+            </div>
+            <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-5 space-y-2">
+              <div className="flex items-center gap-2 text-amber-400">
+                <Sun size={14} />
+                <p className="text-[10px] uppercase tracking-widest">Sesiones Diurnas</p>
+              </div>
+              <p className="text-2xl font-light text-white">{daySessions.length}</p>
+              <p className="text-xs text-gray-500">
+                {daySessions.reduce((a, s) => a + (s.duration_min || 0), 0)} min totales
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-2">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest">Total Sesiones</p>
+              <p className="text-2xl font-light text-white">{sessions.length}</p>
+            </div>
+            <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-2">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest">Minutos Totales</p>
+              <p className="text-2xl font-light text-white">
+                {sessions.reduce((a, s) => a + (s.duration_min || 0), 0)}
+              </p>
+            </div>
+            <div className="bg-[#4B2C69]/10 border border-white/5 rounded-2xl p-5 space-y-2">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest">Protocolo</p>
+              <p className="text-sm font-medium text-[#7B9CFF]">
+                {profile?.plan?.wave_type || '—'}
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Weekly Aggregated Table */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 text-[#7B9CFF]">
-          <Calendar size={20} />
-          <h2 className="text-lg font-medium tracking-tight">Resumen Semanal</h2>
-        </div>
-        
-        <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#4B2C69]/5">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
-                <th className="px-6 py-4 font-medium">Semana</th>
-                <th className="px-6 py-4 font-medium text-center">Sesiones</th>
-                <th className="px-6 py-4 font-medium text-center">% Éxito</th>
-                <th className="px-6 py-4 font-medium text-center">Frec. Media</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm text-gray-300 divide-y divide-white/5">
-              {weeklyStats.map((stat, i) => (
-                <tr key={i} className="hover:bg-white/5 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap font-light">
-                    {format(stat.weekStart, "d 'de' MMM", { locale: es })}
-                  </td>
-                  <td className="px-6 py-4 text-center">{stat.sessionsCount}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] border ${
-                      (stat.completedCount / stat.sessionsCount) > 0.8 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                        : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                    }`}>
-                      {Math.round((stat.completedCount / stat.sessionsCount) * 100)}%
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center text-[#7B9CFF]">
-                    {Math.round((stat.avgFrequency / stat.sessionsCount) * 10) / 10} Hz
-                  </td>
-                </tr>
-              ))}
-              {weeklyStats.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500 italic font-light">
-                    No hay datos suficientes para el análisis semanal.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Detailed Session History */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 text-gray-400">
-          <Activity size={20} />
-          <h2 className="text-lg font-medium tracking-tight">Historial Detallado</h2>
-        </div>
-        
-        <div className="space-y-3">
-          {sessions.map((session) => (
-            <div key={session.id} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/5">
+      {/* Historial */}
+      <section className="space-y-3">
+        <h2 className="text-xs uppercase tracking-widest text-gray-500">Historial de Sesiones</h2>
+        {sessions.length === 0 ? (
+          <p className="text-gray-600 text-sm italic text-center py-8">
+            Aún no hay sesiones registradas.
+          </p>
+        ) : (
+          sessions.map(s => (
+            <div key={s.id} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/5">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#1A1F2E] flex items-center justify-center text-gray-400">
-                  <Moon size={14} />
+                <div className="w-8 h-8 rounded-full bg-[#1A1F2E] flex items-center justify-center">
+                  {s.frequency_hz >= 10 && isBothMode
+                    ? <Sun size={13} className="text-amber-400" />
+                    : <Moon size={13} className="text-[#7B9CFF]" />
+                  }
                 </div>
                 <div>
-                  <p className="text-sm text-white">{format(new Date(session.completed_at), "d 'de' MMMM, HH:mm", { locale: es })}</p>
-                  <p className="text-[10px] text-gray-500 uppercase">{session.duration_min} min • {session.frequency_hz} Hz</p>
+                  <p className="text-sm text-white">
+                    {format(new Date(s.completed_at), "d 'de' MMMM, HH:mm", { locale: es })}
+                  </p>
+                  <p className="text-[10px] text-gray-500 uppercase">
+                    {s.duration_min} min · {s.frequency_hz} Hz
+                  </p>
                 </div>
               </div>
               <button
-                onClick={() => setSessionToDelete(session.id)}
-                className="p-2 rounded-xl bg-red-500/5 text-red-400 hover:bg-red-500/20 border border-red-500/10 transition-colors"
+                onClick={() => setSessionToDelete(s.id)}
+                className="p-2 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
               >
                 <Trash2 size={14} />
               </button>
             </div>
-          ))}
-        </div>
+          ))
+        )}
       </section>
 
-      {/* Confirmation Modal */}
+      {/* Modal borrar sesión */}
       {sessionToDelete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0A0E1A]/90 backdrop-blur-md p-6">
-          <div className="bg-[#1A0A0A] border border-red-500/30 p-8 rounded-3xl text-center max-w-sm">
-            <Trash2 size={40} className="mx-auto text-red-500 mb-4" />
-            <h2 className="text-xl font-light text-white mb-2">¿Borrar esta sesión?</h2>
-            <p className="text-gray-400 mb-8 font-light text-sm">Esta acción es irreversible.</p>
+        <div className="fixed inset-0 z-50 bg-[#0A0E1A]/90 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="bg-[#1A0A0A] border border-red-500/30 p-8 rounded-3xl text-center max-w-sm space-y-4">
+            <h2 className="text-white text-xl font-light">¿Borrar sesión?</h2>
+            <p className="text-gray-500 text-sm">Esta acción es irreversible.</p>
             <div className="flex flex-col gap-3">
-              <button onClick={handleDeleteSession} className="w-full py-3 rounded-xl bg-red-500 text-white font-medium text-sm">Sí, borrar</button>
-              <button onClick={() => setSessionToDelete(null)} className="w-full py-3 rounded-xl bg-white/5 text-white font-medium text-sm">Cancelar</button>
+              <button onClick={handleDeleteSession} className="py-3 bg-red-500 text-white rounded-xl text-sm font-medium">
+                Sí, borrar
+              </button>
+              <button onClick={() => setSessionToDelete(null)} className="py-3 bg-white/5 text-white rounded-xl text-sm">
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
@@ -293,16 +268,69 @@ export default function NeurologoPage() {
   );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
-  return (
-    <div className="bg-[#4B2C69]/10 border border-white/5 rounded-3xl p-6 flex items-center gap-4">
-      <div className="w-12 h-12 rounded-2xl bg-[#0A0E1A] flex items-center justify-center">
-        {icon}
-      </div>
-      <div>
-        <p className="text-[10px] text-gray-500 uppercase tracking-widest">{label}</p>
-        <p className="text-xl font-medium text-white">{value}</p>
-      </div>
-    </div>
-  );
+// Función que genera el diagnóstico diario basado en el check-in
+function generateDailyDiagnostic(checkin: any) {
+  const answers = checkin.answers || {};
+  const mode = checkin.checkin_mode || 'night';
+
+  let score = 0;
+  let metrics: any[] = [];
+
+  if (mode === 'night') {
+    if (answers.q3 === 'much_better') score += 2;
+    else if (answers.q3 === 'better') score += 1;
+    else if (answers.q3 === 'worse') score -= 2;
+    if (answers.q2 === '0') score += 2;
+    else if (answers.q2 === '1') score += 1;
+    else if (answers.q2 === '4+') score -= 2;
+    if (answers.q1b === 'yes') score += 1; // se durmió durante la sesión
+
+    metrics = [
+      { label: 'Despertares', value: answers.q2 || '—', color: answers.q2 === '0' ? 'text-emerald-400' : answers.q2 === '4+' ? 'text-red-400' : 'text-white' },
+      { label: 'Comparación', value: { much_better: 'Mucho mejor', better: 'Mejor', same: 'Igual', worse: 'Peor' }[answers.q3] || '—', color: answers.q3 === 'much_better' ? 'text-emerald-400' : answers.q3 === 'worse' ? 'text-red-400' : 'text-white' },
+      { label: 'Al despertar', value: { rested: 'Descansado', okay: 'Algo cansado', tired: 'Cansado', exhausted: 'Agotado' }[answers.q_quality] || '—', color: answers.q_quality === 'rested' ? 'text-emerald-400' : answers.q_quality === 'exhausted' ? 'text-red-400' : 'text-[#7B9CFF]' },
+      { label: 'Durmió en sesión', value: answers.q1b === 'yes' ? 'Sí ✓' : 'No', color: answers.q1b === 'yes' ? 'text-emerald-400' : 'text-gray-400' },
+    ];
+  } else {
+    if (answers.qd1 === 'much_better') score += 2;
+    else if (answers.qd1 === 'better') score += 1;
+    else if (answers.qd1 === 'worse') score -= 2;
+    if (answers.qd2 === 'yes') score += 1;
+    if (answers.qd3 === 'low') score += 1;
+    else if (answers.qd3 === 'high') score -= 1;
+
+    metrics = [
+      { label: 'Estado post sesión', value: { much_better: 'Excelente', better: 'Mejor', same: 'Igual', worse: 'Peor' }[answers.qd1] || '—', color: answers.qd1 === 'much_better' ? 'text-emerald-400' : answers.qd1 === 'worse' ? 'text-red-400' : 'text-white' },
+      { label: 'Desconexión', value: { yes: 'Completa', partial: 'Parcial', no: 'Difícil' }[answers.qd2] || '—', color: answers.qd2 === 'yes' ? 'text-emerald-400' : answers.qd2 === 'no' ? 'text-amber-400' : 'text-white' },
+      { label: 'Ansiedad actual', value: { low: 'Baja', moderate: 'Moderada', high: 'Alta' }[answers.qd3] || '—', color: answers.qd3 === 'low' ? 'text-emerald-400' : answers.qd3 === 'high' ? 'text-red-400' : 'text-amber-400' },
+      { label: 'Concentración', value: { good: 'Buena', moderate: 'Regular', poor: 'Difícil' }[answers.qd4] || '—', color: answers.qd4 === 'good' ? 'text-emerald-400' : answers.qd4 === 'poor' ? 'text-red-400' : 'text-white' },
+    ];
+  }
+
+  let status: string, statusLabel: string, analysis: string, recommendation: string;
+
+  if (score >= 4) {
+    status = 'improving';
+    statusLabel = 'Progreso excelente';
+    analysis = mode === 'night'
+      ? 'Tu cerebro está respondiendo muy bien al protocolo binaural. Las ondas cerebrales están sincronizando correctamente durante el sueño, lo que se refleja en la calidad del descanso.'
+      : 'El protocolo diurno está generando una respuesta óptima. Tu sistema nervioso autónomo muestra señales claras de regulación.';
+    recommendation = 'Mantené la consistencia. Si el progreso continúa 2-3 días más, el sistema ajustará automáticamente la duración para consolidar el avance.';
+  } else if (score >= 1) {
+    status = 'stable';
+    statusLabel = 'Evolución estable';
+    analysis = mode === 'night'
+      ? 'El tratamiento está actuando dentro de parámetros normales. La adaptación neurológica al estímulo binaural lleva entre 7-14 días en consolidarse.'
+      : 'Tu sistema nervioso está respondiendo al protocolo. La regulación del estado de alerta es progresiva.';
+    recommendation = 'Continuá con el protocolo actual. La consistencia diaria es el factor más importante en las primeras semanas.';
+  } else {
+    status = 'warning';
+    statusLabel = 'Necesita ajuste';
+    analysis = mode === 'night'
+      ? 'Tu respuesta al protocolo actual sugiere que puede ser necesario ajustar la carga del estímulo. Esto es normal en las primeras semanas.'
+      : 'La respuesta al protocolo diurno indica que el sistema nervioso necesita una estimulación diferente.';
+    recommendation = 'Considerá reducir la duración de la sesión o cambiar el horario de uso. El sistema puede ajustar el plan automáticamente.';
+  }
+
+  return { status, statusLabel, analysis, recommendation, metrics, score };
 }
