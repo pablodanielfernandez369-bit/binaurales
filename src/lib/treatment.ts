@@ -9,6 +9,8 @@ export interface TreatmentPlan {
   theta_gain: number;
   fade_in_ms: number;
   fade_out_ms: number;
+  wave_category?: string;
+  wave_type?: string;
 }
 
 export const HARD_LIMITS = {
