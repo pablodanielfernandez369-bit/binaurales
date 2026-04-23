@@ -124,13 +124,24 @@ function SessionContent() {
   useEffect(() => {
     async function init() {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      
-      if (!authUser) {
-        router.push('/login');
+      if (!authUser) { router.push('/login'); return; }
+
+      // Primero verificar modo both — tiene prioridad visual
+      const { data: profileData } = await supabase
+        .from('user_profile')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileData?.questionnaire_mode === 'both' && profileData?.plan_day) {
+        setProfile(profileData);
+        setTimeLeft(profileData.plan.duration_min * 60);
+        setShowPlanSelector(true);
+        setLoading(false);
         return;
       }
 
-      // 1. Fetch active treatment plan (Dynamic)
+      // Si hay plan calibrado activo, usarlo
       const { data: activePlans } = await supabase
         .from('treatment_plans')
         .select('*')
@@ -139,49 +150,24 @@ function SessionContent() {
         .limit(1);
 
       let currentPlan: any = null;
-
       if (activePlans && activePlans.length > 0) {
         const plan = activePlans[0];
         currentPlan = {
-          duration_min: plan.duration_min,
-          frequency_hz: plan.frequency_hz ?? plan.beat_hz ?? plan.theta_beat_hz ?? 4.5, // migración progresiva + fallback seguro
+          ...plan,
+          frequency_hz: plan.frequency_hz ?? plan.beat_hz ?? plan.theta_beat_hz ?? 4.5,
           wave_type: plan.wave_type || 'Calibrado',
-          wave_category: plan.wave_category || 'theta',
-          description: `Plan ajustado tras tu evaluación: ${plan.change_reason || ''}`,
-          master_gain: plan.master_gain,
-          theta_gain: plan.theta_gain,
-          fade_in_ms: plan.fade_in_ms,
-          fade_out_ms: plan.fade_out_ms
+          wave_category: plan.wave_category || 'theta'
         };
-      } else {
-        // Fallback to user_profile.plan
-        const { data: profileData } = await supabase
-          .from('user_profile')
-          .select('*')
-          .eq('id', authUser.id)
-          .single();
-        
-        if (profileData?.plan) {
-          currentPlan = {
-            ...profileData.plan,
-            wave_category: profileData.plan.wave_category || 'theta',
-            master_gain: profileData.plan.master_gain || 0.45,
-            theta_gain: profileData.plan.theta_gain || 0.12,
-            fade_in_ms: profileData.plan.fade_in_ms || 150,
-            fade_out_ms: profileData.plan.fade_out_ms || 200
-          };
-          
-          if (profileData.questionnaire_mode === 'both' && profileData.plan_day) {
-            setProfile(profileData); 
-            setTimeLeft(profileData.plan.duration_min * 60); 
-            setShowPlanSelector(true);
-          }
-        }
+      } else if (profileData?.plan) {
+        currentPlan = {
+          ...profileData.plan,
+          wave_category: profileData.plan.wave_category || 'theta'
+        };
       }
 
-      if (!currentPlan && !showPlanSelector) { router.push('/'); return; }
-      if (currentPlan && !profile) setProfile({ plan: currentPlan });
-      if (currentPlan) setTimeLeft(currentPlan.duration_min * 60);
+      if (!currentPlan) { router.push('/'); return; }
+      setProfile({ plan: currentPlan });
+      setTimeLeft(currentPlan.duration_min * 60);
       setLoading(false);
     }
     init();

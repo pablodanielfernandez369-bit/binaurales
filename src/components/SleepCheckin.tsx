@@ -42,6 +42,12 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   const [suggestion, setSuggestion] = useState<{ suggestedPlan: TreatmentPlan; reason: string; changedField: string } | null>(null);
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const [answers, setAnswers] = useState<any>({});
+  const [checkinResult, setCheckinResult] = useState<{
+    message: string;
+    action: 'maintain' | 'adjust';
+    adjustment?: string;
+    newDuration?: number;
+  } | null>(null);
 
   const getARDate = () => Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
@@ -132,40 +138,101 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
     initCheckin();
   }, []);
 
+  function calculateCheckinScore(answers: any, mode: string): number {
+    let score = 0;
+    if (mode === 'night') {
+      if (answers.q3 === 'much_better') score += 2;
+      else if (answers.q3 === 'better') score += 1;
+      else if (answers.q3 === 'worse') score -= 2;
+      if (answers.q2 === '0') score += 1;
+      if (answers.q1 === 'si') score += 1;
+    } else {
+      if (answers.qd1 === 'much_better') score += 2;
+      else if (answers.qd1 === 'better') score += 1;
+      else if (answers.qd1 === 'worse') score -= 2;
+      if (answers.qd2 === 'yes') score += 1;
+    }
+    return score;
+  }
+
+  function generateRecommendation(score: number, currentDuration: number) {
+    if (score >= 3) {
+      const newDuration = Math.min(45, currentDuration + 5);
+      return {
+        message: 'Excelente respuesta al tratamiento.',
+        action: 'adjust' as const,
+        adjustment: `Vamos a aumentar la duración de ${currentDuration} a ${newDuration} minutos.`,
+        newDuration
+      };
+    } else if (score <= -1) {
+      const newDuration = Math.max(10, currentDuration - 5);
+      return {
+        message: 'Tu cuerpo necesita un ajuste.',
+        action: 'adjust' as const,
+        adjustment: `Reduciremos la duración de ${currentDuration} a ${newDuration} minutos.`,
+        newDuration
+      };
+    }
+    return { message: 'Seguimos con el mismo protocolo. Tu progreso es estable.', action: 'maintain' as const };
+  }
+
+  const applyAdjustment = async () => {
+    if (!checkinResult?.newDuration) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !activePlan) return;
+
+    await supabase.from('treatment_plans').update({ is_active: false }).eq('user_id', user.id);
+    await supabase.from('treatment_plans').insert({
+      user_id: user.id,
+      duration_min: checkinResult.newDuration,
+      master_gain: activePlan.master_gain || 0.45,
+      beat_hz: activePlan.beat_hz || 4.5,
+      theta_gain: activePlan.theta_gain || 0.12,
+      fade_in_ms: activePlan.fade_in_ms || 150,
+      fade_out_ms: activePlan.fade_out_ms || 200,
+      wave_category: activePlan.wave_category,
+      wave_type: activePlan.wave_type,
+      is_active: true,
+      change_reason: checkinResult.newDuration > (activePlan.duration_min || 20) 
+        ? 'Progresión automática post check-in' 
+        : 'Reducción automática post check-in',
+      changed_field: 'duration_min'
+    });
+
+    setCheckinResult(null);
+    alert(`✓ Ajuste aplicado. Nueva duración: ${checkinResult.newDuration} min`);
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const today = getARDate();
-      const payload = {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const today = Intl.DateTimeFormat('en-CA', { 
+      timeZone: 'America/Argentina/Buenos_Aires' 
+    }).format(new Date());
+
+    const { data } = await supabase
+      .from('daily_checkins')
+      .upsert({
         user_id: user.id,
         checkin_date: today,
-        session_id: lastSession?.id || null,
         answers,
         checkin_mode: questionnaireMode,
+        session_id: lastSession?.id || null,
         updated_at: new Date().toISOString()
-      };
-      const { data, error } = await supabase
-        .from('daily_checkins')
-        .upsert(payload, { onConflict: 'user_id,checkin_date' })
-        .select().single();
-      if (error) throw error;
-      if (data) {
-        setExistingCheckin(data);
-        setIsEditing(false);
-        if (!data.suggestion_dismissed && activePlan) {
-          const score = calculateSleepScore(data.answers);
-          const sug = generateTreatmentSuggestion(activePlan, score);
-          setSuggestion(sug);
-        }
-        if (onComplete) onComplete();
-      }
-    } catch (err: any) {
-      alert(`Error al guardar: ${err.message}`);
-    } finally {
-      setSubmitting(false);
+      }, { onConflict: 'user_id,checkin_date' })
+      .select().single();
+
+    if (data) {
+      setExistingCheckin(data);
+      setIsEditing(false);
+      const score = calculateCheckinScore(answers, questionnaireMode);
+      const currentDuration = activePlan?.duration_min || 20;
+      const recommendation = generateRecommendation(score, currentDuration);
+      setCheckinResult(recommendation);
     }
+    setSubmitting(false);
   };
 
   const handleApplySuggestion = async () => {
@@ -298,6 +365,29 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
                 Mantener actual
               </button>
             </div>
+          </motion.div>
+        {checkinResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`p-5 rounded-2xl border space-y-3 mt-4 ${
+              checkinResult.action === 'adjust'
+                ? 'bg-[#7B9CFF]/10 border-[#7B9CFF]/30'
+                : 'bg-emerald-500/5 border-emerald-500/20'
+            }`}
+          >
+            <p className="text-white text-sm font-medium">{checkinResult.message}</p>
+            {checkinResult.adjustment && (
+              <p className="text-gray-400 text-xs leading-relaxed">{checkinResult.adjustment}</p>
+            )}
+            {checkinResult.action === 'adjust' && (
+              <button
+                onClick={applyAdjustment}
+                className="w-full py-3 bg-[#7B9CFF] text-[#0A0E1A] rounded-xl text-sm font-medium"
+              >
+                Aplicar ajuste automático
+              </button>
+            )}
           </motion.div>
         )}
       </div>
