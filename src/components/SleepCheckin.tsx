@@ -15,20 +15,23 @@ interface SleepCheckinProps {
 
 // Preguntas modo NOCHE
 const nightQuestions = [
-  { id: 'q1a', label: '¿Escuchaste el final de la sesión?', options: [{ id: 'finished', label: 'Sí, terminó' }, { id: 'unsure', label: 'Me dormí' }, { id: 'cut', label: 'La corté antes' }] },
-  { id: 'q1b', label: '¿Te dormiste mientras sonaba?', options: [{ id: 'yes', label: 'Sí' }, { id: 'no', label: 'No' }, { id: 'unsure', label: 'No sé' }] },
+  { id: 'q_bedtime', label: '¿A qué hora te fuiste a dormir?', options: [{ id: 'before_22', label: 'Antes de las 22hs' }, { id: '22_23', label: 'Entre 22 y 23hs' }, { id: '23_00', label: 'Entre 23 y 00hs' }, { id: 'after_00', label: 'Después de las 00hs' }] },
+  { id: 'q_total_hours', label: '¿Cuántas horas dormiste en total?', options: [{ id: 'less_5', label: 'Menos de 5hs' }, { id: '5_6', label: '5 a 6hs' }, { id: '6_7', label: '6 a 7hs' }, { id: '7_8', label: '7 a 8hs' }, { id: 'more_8', label: 'Más de 8hs' }] },
+  { id: 'q1b', label: '¿Te dormiste mientras sonaba la sesión?', options: [{ id: 'yes', label: 'Sí' }, { id: 'no', label: 'No' }, { id: 'unsure', label: 'No sé' }] },
   { id: 'q2', label: '¿Cuántas veces te despertaste?', options: [{ id: '0', label: '0' }, { id: '1', label: '1' }, { id: '2-3', label: '2-3' }, { id: '4+', label: '4 o más' }] },
-  { id: 'q_quality', label: '¿Cómo te sentís al despertar hoy?', options: [{ id: 'rested', label: 'Descansado' }, { id: 'okay', label: 'Algo cansado' }, { id: 'tired', label: 'Muy cansado' }, { id: 'exhausted', label: 'Agotado' }] },
+  { id: 'q_dream', label: '¿Soñaste?', options: [{ id: 'yes_vivid', label: 'Sí, vívidamente' }, { id: 'yes_vague', label: 'Sí, algo' }, { id: 'no', label: 'No recuerdo' }] },
+  { id: 'q_quality_score', label: '¿Cómo calificarías tu descanso del 1 al 5?', options: [{ id: '1', label: '1 — Muy malo' }, { id: '2', label: '2 — Malo' }, { id: '3', label: '3 — Regular' }, { id: '4', label: '4 — Bueno' }, { id: '5', label: '5 — Excelente' }] },
   { id: 'q3', label: '¿Cómo dormiste comparado con antes del tratamiento?', options: [{ id: 'much_better', label: 'Mucho mejor' }, { id: 'better', label: 'Mejor' }, { id: 'same', label: 'Igual' }, { id: 'worse', label: 'Peor' }] },
 ];
 
 // Preguntas modo DÍA
 const dayQuestions = [
-  { id: 'qd1', label: '¿Cómo te sentís ahora comparado con antes de la sesión?', options: [{ id: 'much_better', label: 'Mucho más tranquilo' }, { id: 'better', label: 'Algo mejor' }, { id: 'same', label: 'Igual' }, { id: 'worse', label: 'Peor' }] },
+  { id: 'qd_energy', label: '¿Cómo está tu energía ahora del 1 al 5?', options: [{ id: '1', label: '1 — Sin energía' }, { id: '2', label: '2 — Baja' }, { id: '3', label: '3 — Normal' }, { id: '4', label: '4 — Buena' }, { id: '5', label: '5 — Alta' }] },
+  { id: 'qd1', label: '¿Cómo te sentís comparado con antes de la sesión?', options: [{ id: 'much_better', label: 'Mucho más tranquilo' }, { id: 'better', label: 'Algo mejor' }, { id: 'same', label: 'Igual' }, { id: 'worse', label: 'Peor' }] },
   { id: 'qd2', label: '¿Lograste desconectarte durante la sesión?', options: [{ id: 'yes', label: 'Sí, completamente' }, { id: 'partial', label: 'Parcialmente' }, { id: 'no', label: 'No, me costó' }] },
-  { id: 'qd3', label: '¿Cómo está tu nivel de ansiedad ahora?', options: [{ id: 'low', label: 'Bajo' }, { id: 'moderate', label: 'Moderado' }, { id: 'high', label: 'Alto' }] },
-  { id: 'qd4', label: '¿Cómo está tu concentración ahora?', options: [{ id: 'good', label: 'Buena' }, { id: 'moderate', label: 'Regular' }, { id: 'poor', label: 'Difícil' }] },
-  { id: 'q3', label: '¿Cómo fue esta sesión comparada con las anteriores?', options: [{ id: 'much_better', label: 'Mucho mejor' }, { id: 'better', label: 'Mejor' }, { id: 'same', label: 'Igual' }, { id: 'worse', label: 'Peor' }] },
+  { id: 'qd_focus', label: '¿Pudiste concentrarte en tareas largas hoy?', options: [{ id: 'yes', label: 'Sí, sin problema' }, { id: 'partial', label: 'Con algo de esfuerzo' }, { id: 'no', label: 'Me costó mucho' }] },
+  { id: 'qd3', label: '¿Cómo está tu ansiedad ahora?', options: [{ id: 'low', label: 'Baja' }, { id: 'moderate', label: 'Moderada' }, { id: 'high', label: 'Alta' }] },
+  { id: 'q3', label: '¿Sentís el efecto de la sesión?', options: [{ id: 'much_better', label: 'Sí, claramente' }, { id: 'better', label: 'Algo' }, { id: 'same', label: 'No todavía' }, { id: 'worse', label: 'Me afectó negativamente' }] },
 ];
 
 export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
@@ -147,13 +150,40 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
       if (answers.q3 === 'much_better') score += 2;
       else if (answers.q3 === 'better') score += 1;
       else if (answers.q3 === 'worse') score -= 2;
-      if (answers.q2 === '0') score += 1;
-      if (answers.q1a === 'finished') score += 1;
+
+      if (answers.q2 === '0') score += 2;
+      else if (answers.q2 === '1') score += 1;
+      else if (answers.q2 === '4+') score -= 2;
+
+      if (answers.q_quality_score === '5') score += 2;
+      else if (answers.q_quality_score === '4') score += 1;
+      else if (answers.q_quality_score === '2') score -= 1;
+      else if (answers.q_quality_score === '1') score -= 2;
+
+      if (answers.q_total_hours === '7_8' || answers.q_total_hours === 'more_8') score += 1;
+      else if (answers.q_total_hours === 'less_5') score -= 1;
+
+      if (answers.q1b === 'yes') score += 1;
+      if (answers.q_dream === 'yes_vivid') score += 1;
     } else {
       if (answers.qd1 === 'much_better') score += 2;
       else if (answers.qd1 === 'better') score += 1;
       else if (answers.qd1 === 'worse') score -= 2;
+
       if (answers.qd2 === 'yes') score += 1;
+      else if (answers.qd2 === 'no') score -= 1;
+
+      if (answers.qd3 === 'low') score += 1;
+      else if (answers.qd3 === 'high') score -= 1;
+
+      if (answers.qd_energy === '5' || answers.qd_energy === '4') score += 1;
+      else if (answers.qd_energy === '1') score -= 1;
+
+      if (answers.qd_focus === 'yes') score += 1;
+      else if (answers.qd_focus === 'no') score -= 1;
+
+      if (answers.q3 === 'much_better') score += 1;
+      else if (answers.q3 === 'worse') score -= 1;
     }
     return score;
   }

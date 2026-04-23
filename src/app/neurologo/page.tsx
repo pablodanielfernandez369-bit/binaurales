@@ -279,10 +279,26 @@ function generateDailyDiagnostic(checkin: any) {
     if (answers.q1b === 'yes') score += 1; // se durmió durante la sesión
 
     metrics = [
-      { label: 'Despertares', value: answers.q2 || '—', color: answers.q2 === '0' ? 'text-emerald-400' : answers.q2 === '4+' ? 'text-red-400' : 'text-white' },
-      { label: 'Comparación', value: (({ much_better: 'Mucho mejor', better: 'Mejor', same: 'Igual', worse: 'Peor' } as Record<string,string>)[answers.q3]) || '—', color: answers.q3 === 'much_better' ? 'text-emerald-400' : answers.q3 === 'worse' ? 'text-red-400' : 'text-white' },
-      { label: 'Al despertar', value: (({ rested: 'Descansado', okay: 'Algo cansado', tired: 'Cansado', exhausted: 'Agotado' } as Record<string,string>)[answers.q_quality]) || '—', color: answers.q_quality === 'rested' ? 'text-emerald-400' : answers.q_quality === 'exhausted' ? 'text-red-400' : 'text-[#7B9CFF]' },
-      { label: 'Durmió en sesión', value: answers.q1b === 'yes' ? 'Sí ✓' : 'No', color: answers.q1b === 'yes' ? 'text-emerald-400' : 'text-gray-400' },
+      {
+        label: 'Horas dormidas',
+        value: ({ less_5: '<5hs', '5_6': '5-6hs', '6_7': '6-7hs', '7_8': '7-8hs', more_8: '+8hs' } as Record<string,string>)[answers.q_total_hours] || '—',
+        color: (answers.q_total_hours === '7_8' || answers.q_total_hours === 'more_8') ? 'text-emerald-400' : answers.q_total_hours === 'less_5' ? 'text-red-400' : 'text-white'
+      },
+      {
+        label: 'Despertares',
+        value: answers.q2 || '—',
+        color: answers.q2 === '0' ? 'text-emerald-400' : answers.q2 === '4+' ? 'text-red-400' : 'text-white'
+      },
+      {
+        label: 'Calidad',
+        value: answers.q_quality_score ? `${answers.q_quality_score}/5` : '—',
+        color: ['4','5'].includes(answers.q_quality_score) ? 'text-emerald-400' : ['1','2'].includes(answers.q_quality_score) ? 'text-red-400' : 'text-[#7B9CFF]'
+      },
+      {
+        label: 'REM (sueños)',
+        value: ({ yes_vivid: 'Sí, vívidos', yes_vague: 'Sí, algo', no: 'No recuerda' } as Record<string,string>)[answers.q_dream] || '—',
+        color: answers.q_dream === 'yes_vivid' ? 'text-emerald-400' : 'text-gray-400'
+      },
     ];
   } else {
     if (answers.qd1 === 'much_better') score += 2;
