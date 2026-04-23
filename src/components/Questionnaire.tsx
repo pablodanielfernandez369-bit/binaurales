@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ShieldCheck, Moon, Sun, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { generateDiagnostic, generateDayDiagnostic, SleepPlan, QuestionnaireResponses, DayResponses } from '@/lib/diagnostic';
+import { Toast } from '@/components/Toast';
+import { useToast } from '@/hooks/useToast';
 
 const nightSteps = [
   { id: 'sleep_hours', block: 'Patrón de Sueño', question: '¿Cuántas horas dormís por noche en promedio?', type: 'slider', min: 3, max: 10, unit: 'hs' },

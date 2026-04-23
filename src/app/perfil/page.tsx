@@ -98,24 +98,73 @@ export default function ProfilePage() {
         </header>
 
         {/* Diagnostic Card */}
-        <section className="bg-[#4B2C69]/10 border border-white/5 rounded-3xl p-6">
-          <div className="flex items-center gap-2 text-[#7B9CFF] mb-4">
-            <Brain size={18} />
-            <h2 className="text-sm font-medium uppercase tracking-wider">Diagnóstico</h2>
-          </div>
-          <p className="text-gray-300 font-light leading-relaxed mb-6">
-            "{profile?.plan?.description || 'No hay diagnóstico disponible.'}"
-          </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
-              <span className="text-[10px] text-gray-500 uppercase block mb-1">Onda</span>
-              <span className="text-sm font-medium text-white">{profile?.plan?.wave_type}</span>
+        <section>
+          {profile?.questionnaire_mode === 'both' && profile?.plan_day ? (
+            <div className="space-y-4">
+              <div className="bg-[#4B2C69]/10 border border-white/5 rounded-3xl p-6">
+                <div className="flex items-center gap-2 text-[#7B9CFF] mb-4">
+                  <Moon size={16} />
+                  <h2 className="text-sm font-medium uppercase tracking-wider">Protocolo Nocturno</h2>
+                </div>
+                <p className="text-gray-300 font-light text-sm italic mb-4">"{profile?.plan?.description}"</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
+                    <span className="text-[10px] text-gray-500 uppercase block mb-1">Onda</span>
+                    <span className="text-sm font-medium text-white">{profile?.plan?.wave_type}</span>
+                  </div>
+                  <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
+                    <span className="text-[10px] text-gray-500 uppercase block mb-1">Frecuencia</span>
+                    <span className="text-sm font-medium text-[#7B9CFF]">{profile?.plan?.frequency_hz} Hz</span>
+                  </div>
+                  <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5 col-span-2">
+                    <span className="text-[10px] text-gray-500 uppercase block mb-1">Momento ideal</span>
+                    <span className="text-sm font-medium text-white">{profile?.plan?.ideal_time}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-amber-500/5 border border-amber-500/10 rounded-3xl p-6">
+                <div className="flex items-center gap-2 text-amber-400 mb-4">
+                  <Sun size={16} />
+                  <h2 className="text-sm font-medium uppercase tracking-wider">Protocolo Diurno</h2>
+                </div>
+                <p className="text-gray-300 font-light text-sm italic mb-4">"{profile?.plan_day?.description}"</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
+                    <span className="text-[10px] text-gray-500 uppercase block mb-1">Onda</span>
+                    <span className="text-sm font-medium text-white">{profile?.plan_day?.wave_type}</span>
+                  </div>
+                  <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
+                    <span className="text-[10px] text-gray-500 uppercase block mb-1">Frecuencia</span>
+                    <span className="text-sm font-medium text-amber-400">{profile?.plan_day?.frequency_hz} Hz</span>
+                  </div>
+                  <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5 col-span-2">
+                    <span className="text-[10px] text-gray-500 uppercase block mb-1">Momento ideal</span>
+                    <span className="text-sm font-medium text-white">{profile?.plan_day?.ideal_time}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
-              <span className="text-[10px] text-gray-500 uppercase block mb-1">Frecuencia</span>
-              <span className="text-sm font-medium text-[#7B9CFF]">{profile?.plan?.frequency_hz} Hz</span>
+          ) : (
+            <div className="bg-[#4B2C69]/10 border border-white/5 rounded-3xl p-6">
+              <div className="flex items-center gap-2 text-[#7B9CFF] mb-4">
+                <Brain size={18} />
+                <h2 className="text-sm font-medium uppercase tracking-wider">Diagnóstico</h2>
+              </div>
+              <p className="text-gray-300 font-light leading-relaxed mb-6">
+                "{profile?.plan?.description || 'No hay diagnóstico disponible.'}"
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
+                  <span className="text-[10px] text-gray-500 uppercase block mb-1">Onda</span>
+                  <span className="text-sm font-medium text-white">{profile?.plan?.wave_type}</span>
+                </div>
+                <div className="bg-[#0A0E1A]/40 rounded-2xl p-4 border border-white/5">
+                  <span className="text-[10px] text-gray-500 uppercase block mb-1">Frecuencia</span>
+                  <span className="text-sm font-medium text-[#7B9CFF]">{profile?.plan?.frequency_hz} Hz</span>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* Stats / History */}

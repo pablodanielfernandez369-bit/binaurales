@@ -376,6 +376,12 @@ function SessionContent() {
   if (loading) return <div className="flex min-h-screen items-center justify-center text-[#7B9CFF]">Sincronizando Ondas...</div>;
 
   if (showPlanSelector && profile?.plan_day) {
+    function getSuggestedProtocol(): 'night' | 'day' {
+      const hour = new Date().getHours();
+      return (hour >= 18 || hour < 7) ? 'night' : 'day';
+    }
+    const suggested = getSuggestedProtocol();
+
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-6">
         <motion.div 
@@ -399,6 +405,11 @@ function SessionContent() {
             <div className="flex items-center gap-2 text-[#7B9CFF] group-hover:scale-105 transition-transform">
               <Moon size={18} />
               <span className="text-sm font-medium uppercase tracking-wider">Protocolo Nocturno</span>
+              {suggested === 'night' && (
+                <span className="text-[10px] bg-[#7B9CFF]/20 text-[#7B9CFF] px-2 py-0.5 rounded-full border border-[#7B9CFF]/30 ml-auto">
+                  ✦ Te toca esta
+                </span>
+              )}
             </div>
             <p className="text-xs text-gray-500">{profile.plan.wave_type} · {profile.plan.frequency_hz} Hz · {profile.plan.ideal_time}</p>
           </button>
@@ -414,6 +425,11 @@ function SessionContent() {
             <div className="flex items-center gap-2 text-amber-400 group-hover:scale-105 transition-transform">
               <Sun size={18} />
               <span className="text-sm font-medium uppercase tracking-wider">Protocolo Diurno</span>
+              {suggested === 'day' && (
+                <span className="text-[10px] bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-400/30 ml-auto">
+                  ✦ Te toca esta
+                </span>
+              )}
             </div>
             <p className="text-xs text-gray-500">{profile.plan_day.wave_type} · {profile.plan_day.frequency_hz} Hz · {profile.plan_day.ideal_time}</p>
           </button>
