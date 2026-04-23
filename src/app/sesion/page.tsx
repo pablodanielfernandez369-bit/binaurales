@@ -392,7 +392,7 @@ function SessionContent() {
   if (showPlanSelector && profile?.plan_day) {
     function getSuggestedProtocol(): 'night' | 'day' {
       const hour = new Date().getHours();
-      return (hour >= 18 || hour < 7) ? 'night' : 'day';
+      return (hour >= 7 && hour < 20) ? 'day' : 'night';
     }
     const suggested = getSuggestedProtocol();
 
