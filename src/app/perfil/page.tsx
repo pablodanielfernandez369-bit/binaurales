@@ -120,11 +120,10 @@ export default function ProfilePage() {
 
         {/* Stats / History */}
         <section>
-            <div className="flex items-center gap-2 text-gray-400">
+          <div className="flex items-center gap-2 text-gray-400 mb-4">
               <Activity size={18} />
               <h2 className="text-sm font-medium uppercase tracking-wider">Sesiones Recientes</h2>
             </div>
-          </div>
 
           {/* Contador por protocolo */}
           {profile?.questionnaire_mode === 'both' ? (

@@ -287,8 +287,8 @@ function generateDailyDiagnostic(checkin: any) {
 
     metrics = [
       { label: 'Despertares', value: answers.q2 || '—', color: answers.q2 === '0' ? 'text-emerald-400' : answers.q2 === '4+' ? 'text-red-400' : 'text-white' },
-      { label: 'Comparación', value: { much_better: 'Mucho mejor', better: 'Mejor', same: 'Igual', worse: 'Peor' }[answers.q3] || '—', color: answers.q3 === 'much_better' ? 'text-emerald-400' : answers.q3 === 'worse' ? 'text-red-400' : 'text-white' },
-      { label: 'Al despertar', value: { rested: 'Descansado', okay: 'Algo cansado', tired: 'Cansado', exhausted: 'Agotado' }[answers.q_quality] || '—', color: answers.q_quality === 'rested' ? 'text-emerald-400' : answers.q_quality === 'exhausted' ? 'text-red-400' : 'text-[#7B9CFF]' },
+      { label: 'Comparación', value: (({ much_better: 'Mucho mejor', better: 'Mejor', same: 'Igual', worse: 'Peor' } as Record<string,string>)[answers.q3]) || '—', color: answers.q3 === 'much_better' ? 'text-emerald-400' : answers.q3 === 'worse' ? 'text-red-400' : 'text-white' },
+      { label: 'Al despertar', value: (({ rested: 'Descansado', okay: 'Algo cansado', tired: 'Cansado', exhausted: 'Agotado' } as Record<string,string>)[answers.q_quality]) || '—', color: answers.q_quality === 'rested' ? 'text-emerald-400' : answers.q_quality === 'exhausted' ? 'text-red-400' : 'text-[#7B9CFF]' },
       { label: 'Durmió en sesión', value: answers.q1b === 'yes' ? 'Sí ✓' : 'No', color: answers.q1b === 'yes' ? 'text-emerald-400' : 'text-gray-400' },
     ];
   } else {
@@ -300,10 +300,10 @@ function generateDailyDiagnostic(checkin: any) {
     else if (answers.qd3 === 'high') score -= 1;
 
     metrics = [
-      { label: 'Estado post sesión', value: { much_better: 'Excelente', better: 'Mejor', same: 'Igual', worse: 'Peor' }[answers.qd1] || '—', color: answers.qd1 === 'much_better' ? 'text-emerald-400' : answers.qd1 === 'worse' ? 'text-red-400' : 'text-white' },
-      { label: 'Desconexión', value: { yes: 'Completa', partial: 'Parcial', no: 'Difícil' }[answers.qd2] || '—', color: answers.qd2 === 'yes' ? 'text-emerald-400' : answers.qd2 === 'no' ? 'text-amber-400' : 'text-white' },
-      { label: 'Ansiedad actual', value: { low: 'Baja', moderate: 'Moderada', high: 'Alta' }[answers.qd3] || '—', color: answers.qd3 === 'low' ? 'text-emerald-400' : answers.qd3 === 'high' ? 'text-red-400' : 'text-amber-400' },
-      { label: 'Concentración', value: { good: 'Buena', moderate: 'Regular', poor: 'Difícil' }[answers.qd4] || '—', color: answers.qd4 === 'good' ? 'text-emerald-400' : answers.qd4 === 'poor' ? 'text-red-400' : 'text-white' },
+      { label: 'Estado post sesión', value: (({ much_better: 'Excelente', better: 'Mejor', same: 'Igual', worse: 'Peor' } as Record<string,string>)[answers.qd1]) || '—', color: answers.qd1 === 'much_better' ? 'text-emerald-400' : answers.qd1 === 'worse' ? 'text-red-400' : 'text-white' },
+      { label: 'Desconexión', value: (({ yes: 'Completa', partial: 'Parcial', no: 'Difícil' } as Record<string,string>)[answers.qd2]) || '—', color: answers.qd2 === 'yes' ? 'text-emerald-400' : answers.qd2 === 'no' ? 'text-amber-400' : 'text-white' },
+      { label: 'Ansiedad actual', value: (({ low: 'Baja', moderate: 'Moderada', high: 'Alta' } as Record<string,string>)[answers.qd3]) || '—', color: answers.qd3 === 'low' ? 'text-emerald-400' : answers.qd3 === 'high' ? 'text-red-400' : 'text-amber-400' },
+      { label: 'Concentración', value: (({ good: 'Buena', moderate: 'Regular', poor: 'Difícil' } as Record<string,string>)[answers.qd4]) || '—', color: answers.qd4 === 'good' ? 'text-emerald-400' : answers.qd4 === 'poor' ? 'text-red-400' : 'text-white' },
     ];
   }
 
