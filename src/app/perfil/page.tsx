@@ -33,15 +33,36 @@ export default function ProfilePage() {
         .eq('id', user.id)
         .single();
       
-      const { data: sessionsData } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('completed', true)
-        .order('completed_at', { ascending: false })
-        .limit(5);
+      const [{ data: sessionsData }, { data: activePlans }] = await Promise.all([
+        supabase
+          .from('sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('completed', true)
+          .order('completed_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('treatment_plans')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .limit(1),
+      ]);
 
-      if (profileData) setProfile(profileData);
+      let mergedProfile = profileData;
+      if (profileData && profileData.questionnaire_mode !== 'both' && activePlans?.length) {
+        const tp = activePlans[0];
+        mergedProfile = {
+          ...profileData,
+          plan: {
+            ...profileData.plan,
+            ...tp,
+            frequency_hz: tp.frequency_hz ?? tp.beat_hz ?? profileData.plan?.frequency_hz,
+          },
+        };
+      }
+
+      if (mergedProfile) setProfile(mergedProfile);
       if (sessionsData) setSessions(sessionsData);
       setLoading(false);
     }
