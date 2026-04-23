@@ -116,24 +116,23 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
         }
         setActivePlan(initialPlan);
 
-        // Check-in de la última sesión
-        if (sessions && sessions.length > 0) {
-          const { data: checkins } = await supabase
-            .from('daily_checkins')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('session_id_ref', sessions[0].id)
-            .limit(1);
+        // Check-in de hoy filtrado por modo
+        const { data: checkins } = await supabase
+          .from('daily_checkins')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('checkin_date', today)
+          .eq('checkin_mode', profile?.questionnaire_mode === 'both' ? 'night' : (profile?.questionnaire_mode || 'night'))
+          .limit(1);
 
-          if (checkins && checkins.length > 0) {
-            setExistingCheckin(checkins[0]);
-            setAnswers(checkins[0].answers || {});
-            setSuggestionDismissed(checkins[0].suggestion_dismissed || false);
-            if (!checkins[0].suggestion_dismissed && initialPlan) {
-              const score = calculateSleepScore(checkins[0].answers);
-              const sug = generateTreatmentSuggestion(initialPlan, score);
-              setSuggestion(sug);
-            }
+        if (checkins && checkins.length > 0) {
+          setExistingCheckin(checkins[0]);
+          setAnswers(checkins[0].answers || {});
+          setSuggestionDismissed(checkins[0].suggestion_dismissed || false);
+          if (!checkins[0].suggestion_dismissed && initialPlan) {
+            const score = calculateSleepScore(checkins[0].answers);
+            const sug = generateTreatmentSuggestion(initialPlan, score);
+            setSuggestion(sug);
           }
         }
       } catch (err) {
@@ -254,9 +253,8 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
         answers,
         checkin_mode: questionnaireMode,
         session_id: lastSession?.id || null,
-        session_id_ref: lastSession?.id || null,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,session_id_ref' })
+      }, { onConflict: 'user_id,checkin_date,checkin_mode' })
       .select().single();
 
     if (data) {
@@ -322,14 +320,42 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
 
   const ModeTabs = () => (
     <div className="flex gap-2 p-1 bg-white/5 rounded-2xl mb-4">
-      <button 
-        onClick={() => setQuestionnaireMode('night')}
+      <button
+        onClick={async () => {
+          setQuestionnaireMode('night');
+          setAnswers({});
+          setExistingCheckin(null);
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          const today = getARDate();
+          const { data } = await supabase
+            .from('daily_checkins').select('*')
+            .eq('user_id', user.id)
+            .eq('checkin_date', today)
+            .eq('checkin_mode', 'night')
+            .limit(1);
+          if (data?.[0]) { setExistingCheckin(data[0]); setAnswers(data[0].answers || {}); }
+        }}
         className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'night' ? 'bg-[#7B9CFF] text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}
       >
         <Moon size={14} /> Noche
       </button>
-      <button 
-        onClick={() => setQuestionnaireMode('day')}
+      <button
+        onClick={async () => {
+          setQuestionnaireMode('day');
+          setAnswers({});
+          setExistingCheckin(null);
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          const today = getARDate();
+          const { data } = await supabase
+            .from('daily_checkins').select('*')
+            .eq('user_id', user.id)
+            .eq('checkin_date', today)
+            .eq('checkin_mode', 'day')
+            .limit(1);
+          if (data?.[0]) { setExistingCheckin(data[0]); setAnswers(data[0].answers || {}); }
+        }}
         className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'day' ? 'bg-amber-400 text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}
       >
         <Sun size={14} /> Día
