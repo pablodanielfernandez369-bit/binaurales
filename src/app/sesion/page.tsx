@@ -604,20 +604,26 @@ function SessionContent() {
               {debugMode ? 'OCULTAR DIAGNÓSTICO' : 'MODO DIAGNÓSTICO'}
             </button>
             
-            {debugMode && (
-              <div className="flex flex-col gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
-                <label className="flex items-center justify-between text-xs text-gray-400">
-                  <span>Visualizador Activo</span>
-                  <input type="checkbox" checked={showVisualizer} onChange={(e) => setShowVisualizer(e.target.checked)} />
-                </label>
-                <label className="flex items-center justify-between text-xs text-gray-400">
-                  <span>Silenciar Binaural</span>
-                  <input type="checkbox" checked={muteOsc} onChange={(e) => setMuteOsc(e.target.checked)} />
-                </label>
-                <label className="flex items-center justify-between text-xs text-gray-400">
-                  <span>Silenciar Ruido</span>
-                  <input type="checkbox" checked={muteNoise} onChange={(e) => setMuteNoise(e.target.checked)} />
-                </label>
+            {debugMode && profile && (
+              <div className="mt-4 bg-black/40 rounded-2xl p-4 text-left space-y-2 font-mono text-xs">
+                <p className="text-[#7B9CFF] font-bold mb-2">── Audio Debug ──</p>
+                <p className="text-gray-300">Onda: <span className="text-white">{profile.plan.wave_category}</span></p>
+                <p className="text-gray-300">Portadora L: <span className="text-white">
+                  {profile.plan.wave_category === 'delta' ? 200 :
+                   profile.plan.wave_category === 'theta' ? 250 :
+                   profile.plan.wave_category === 'alpha_theta' ? 300 :
+                   profile.plan.wave_category === 'alpha' ? 350 : 400} Hz
+                </span></p>
+                <p className="text-gray-300">Portadora R: <span className="text-emerald-400">
+                  {(profile.plan.wave_category === 'delta' ? 200 :
+                    profile.plan.wave_category === 'theta' ? 250 :
+                    profile.plan.wave_category === 'alpha_theta' ? 300 :
+                    profile.plan.wave_category === 'alpha' ? 350 : 400) + profile.plan.frequency_hz} Hz
+                </span></p>
+                <p className="text-gray-300">Beat binaural: <span className="text-emerald-400 font-bold">{profile.plan.frequency_hz} Hz</span></p>
+                <p className="text-gray-300">Master gain: <span className="text-white">{profile.plan.master_gain || 0.45}</span></p>
+                <p className="text-gray-300">Osc gain: <span className="text-white">{profile.plan.theta_gain || 0.12}</span></p>
+                <p className="text-gray-300">Noise vol: <span className="text-white">{noiseVolume}</span></p>
               </div>
             )}
           </div>
