@@ -116,23 +116,24 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
         }
         setActivePlan(initialPlan);
 
-        // Check-in de hoy
-        const { data: checkins } = await supabase
-          .from('daily_checkins')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('checkin_date', today)
-          .limit(1);
+        // Check-in de la última sesión
+        if (sessions && sessions.length > 0) {
+          const { data: checkins } = await supabase
+            .from('daily_checkins')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('session_id_ref', sessions[0].id)
+            .limit(1);
 
-        if (checkins && checkins.length > 0) {
-          const todayCheckin = checkins[0];
-          setExistingCheckin(todayCheckin);
-          setAnswers(todayCheckin.answers || {});
-          setSuggestionDismissed(todayCheckin.suggestion_dismissed || false);
-          if (!todayCheckin.suggestion_dismissed && initialPlan) {
-            const score = calculateSleepScore(todayCheckin.answers);
-            const sug = generateTreatmentSuggestion(initialPlan, score);
-            setSuggestion(sug);
+          if (checkins && checkins.length > 0) {
+            setExistingCheckin(checkins[0]);
+            setAnswers(checkins[0].answers || {});
+            setSuggestionDismissed(checkins[0].suggestion_dismissed || false);
+            if (!checkins[0].suggestion_dismissed && initialPlan) {
+              const score = calculateSleepScore(checkins[0].answers);
+              const sug = generateTreatmentSuggestion(initialPlan, score);
+              setSuggestion(sug);
+            }
           }
         }
       } catch (err) {
@@ -253,8 +254,9 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
         answers,
         checkin_mode: questionnaireMode,
         session_id: lastSession?.id || null,
+        session_id_ref: lastSession?.id || null,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,checkin_date' })
+      }, { onConflict: 'user_id,session_id_ref' })
       .select().single();
 
     if (data) {
