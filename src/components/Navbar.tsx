@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PlayCircle, User, Activity } from 'lucide-react';
+import { PlayCircle, User, Activity, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -26,9 +26,10 @@ export default function Navbar() {
   // Don't show navbar on questionnaire or login (clean landing)
   if (pathname === '/' || pathname === '/login') return null;
 
-  const navItems = session 
+  const navItems = session
     ? [
         { name: 'Sesión', href: '/sesion', icon: PlayCircle },
+        { name: 'Meditación', href: '/meditacion', icon: Sparkles },
         { name: 'Clínico', href: '/neurologo', icon: Activity },
         { name: 'Perfil', href: '/perfil', icon: User },
       ]
