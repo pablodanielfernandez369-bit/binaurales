@@ -409,10 +409,10 @@ function SessionContent() {
           </div>
           
           <button
-            onClick={() => { 
-              // profile ya tiene .plan por defecto
-              setTimeLeft(profile.plan.duration_min * 60); 
-              setShowPlanSelector(false); 
+            onClick={() => {
+              setProfile((prev: any) => prev ? { ...prev, questionnaire_mode: 'night' } : prev);
+              setTimeLeft(profile.plan.duration_min * 60);
+              setShowPlanSelector(false);
             }}
             className="w-full p-6 rounded-3xl bg-[#4B2C69]/10 border border-white/5 hover:border-[#7B9CFF]/30 transition-all text-left space-y-2 group"
           >
@@ -430,7 +430,7 @@ function SessionContent() {
           
           <button
             onClick={() => {
-              setProfile((prev: any) => ({ ...prev, plan: prev.plan_day }));
+              setProfile((prev: any) => prev ? { ...prev, plan: prev.plan_day, questionnaire_mode: 'day' } : prev);
               setTimeLeft(profile.plan_day.duration_min * 60);
               setShowPlanSelector(false);
             }}

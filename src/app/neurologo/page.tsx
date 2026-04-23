@@ -35,7 +35,8 @@ export default function NeurologoPage() {
       .select('*')
       .eq('user_id', user.id)
       .eq('completed', true)
-      .order('completed_at', { ascending: false });
+      .order('completed_at', { ascending: false })
+      .limit(100);
     setSessions(sess || []);
 
     // Buscar check-in de hoy para diagnóstico diario
