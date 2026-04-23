@@ -1,6 +1,5 @@
 'use client';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
 
 interface WaveVisualizerProps {
   isPlaying: boolean;
@@ -9,12 +8,7 @@ interface WaveVisualizerProps {
 }
 
 export default function WaveVisualizer({ isPlaying, frequency, waveCategory }: WaveVisualizerProps) {
-  const [dots, setDots] = useState<number[]>([]);
-
-  useEffect(() => {
-    // Generar 20 puntos para la visualización
-    setDots(Array.from({ length: 20 }, (_, i) => i));
-  }, []);
+  const dots = Array.from({ length: 20 }, (_, i) => i);
 
   // Duración corregida: mapeo más intuitivo y clínico
   const duration = Math.max(0.3, Math.min(4, 8 / frequency));

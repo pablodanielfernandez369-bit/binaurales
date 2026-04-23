@@ -319,7 +319,9 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                {lastSession ? format(new Date(lastSession.completed_at), "d 'de' MMMM", { locale: es }) : 'Hoy'}
+                {lastSession?.completed_at 
+                  ? format(new Date(lastSession.completed_at), "d 'de' MMMM", { locale: es }) 
+                  : 'Hoy'}
               </p>
             </div>
           </div>
