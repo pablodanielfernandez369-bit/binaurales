@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ShieldCheck, Moon, Sun, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -32,6 +33,9 @@ type Mode = 'select' | 'night' | 'day' | 'both';
 type BothPhase = 'night' | 'night_result' | 'day' | 'day_result';
 
 export default function Questionnaire() {
+  const router = useRouter();
+  const { toasts, toast, dismiss } = useToast();
+
   const [mode, setMode] = useState<Mode>('select');
   const [bothPhase, setBothPhase] = useState<BothPhase>('night');
   const [currentStep, setCurrentStep] = useState(0);
@@ -66,21 +70,31 @@ export default function Questionnaire() {
       const result = generateDiagnostic(responses as QuestionnaireResponses);
       setDiagnostic(result);
       setIsCompleted(true);
-      await supabase.from('user_profile').upsert(
+      const { error } = await supabase.from('user_profile').upsert(
         { id: user.id, email: user.email, answers: responses, plan: result.plan, questionnaire_mode: 'night', created_at: new Date().toISOString() },
         { onConflict: 'id' }
       );
-      setTimeout(() => { window.location.href = '/sesion'; }, 3500);
+      if (error) {
+        toast('No se pudo guardar el diagnóstico. Verificá tu conexión.', 'error');
+        return;
+      }
+      toast('Diagnóstico guardado. Iniciando sesión...', 'success');
+      setTimeout(() => router.push('/sesion'), 3500);
 
     } else if (mode === 'day') {
       const result = generateDayDiagnostic(responses as DayResponses);
       setDiagnostic(result);
       setIsCompleted(true);
-      await supabase.from('user_profile').upsert(
+      const { error } = await supabase.from('user_profile').upsert(
         { id: user.id, email: user.email, answers: responses, plan: result.plan, questionnaire_mode: 'day', created_at: new Date().toISOString() },
         { onConflict: 'id' }
       );
-      setTimeout(() => { window.location.href = '/sesion'; }, 3500);
+      if (error) {
+        toast('No se pudo guardar el diagnóstico. Verificá tu conexión.', 'error');
+        return;
+      }
+      toast('Diagnóstico guardado. Iniciando sesión...', 'success');
+      setTimeout(() => router.push('/sesion'), 3500);
 
     } else if (mode === 'both') {
       if (bothPhase === 'night') {
@@ -94,7 +108,7 @@ export default function Questionnaire() {
         setBothPhase('day_result');
 
         // Guardar ambos planes — nocturno como plan principal, diurno como plan_day
-        await supabase.from('user_profile').upsert(
+        const { error } = await supabase.from('user_profile').upsert(
           {
             id: user.id,
             email: user.email,
@@ -106,6 +120,12 @@ export default function Questionnaire() {
           },
           { onConflict: 'id' }
         );
+        if (error) {
+          toast('No se pudo guardar el plan dual. Verificá tu conexión.', 'error');
+          setBothPhase('night_result');
+          return;
+        }
+        toast('Ambos planes guardados correctamente.', 'success');
       }
     }
   };
@@ -141,6 +161,7 @@ export default function Questionnaire() {
   if (mode === 'both' && bothPhase === 'day_result' && nightDiagnostic && dayDiagnostic) {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full p-8 space-y-6 mx-auto">
+        <Toast toasts={toasts} onDismiss={dismiss} />
         <div className="flex justify-center">
           <div className="w-16 h-16 rounded-full bg-[#7B9CFF]/10 flex items-center justify-center border border-[#7B9CFF]/20">
             <ShieldCheck className="w-8 h-8 text-[#7B9CFF]" />
@@ -166,7 +187,7 @@ export default function Questionnaire() {
           <p className="text-xs text-gray-500">{dayDiagnostic.plan.frequency_hz} Hz · {dayDiagnostic.plan.ideal_time}</p>
         </div>
 
-        <button onClick={() => { window.location.href = '/sesion'; }}
+        <button onClick={() => router.push('/sesion')}
           className="w-full py-4 bg-[#7B9CFF] text-[#0A0E1A] rounded-2xl font-medium transition-transform active:scale-95">
           Comenzar primera sesión
         </button>
@@ -178,6 +199,7 @@ export default function Questionnaire() {
   if (isCompleted && diagnostic) {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-md w-full p-8 space-y-6 mx-auto">
+        <Toast toasts={toasts} onDismiss={dismiss} />
         <div className="flex justify-center">
           <div className="w-20 h-20 rounded-full bg-[#7B9CFF]/10 flex items-center justify-center border border-[#7B9CFF]/20">
             <ShieldCheck className="w-10 h-10 text-[#7B9CFF]" />

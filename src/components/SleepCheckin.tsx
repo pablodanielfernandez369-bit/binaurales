@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Edit3, Sparkles, ArrowRight, CheckSquare, Moon, Sun } from 'lucide-react';
+import { Toast } from '@/components/Toast';
+import { useToast } from '@/hooks/useToast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { calculateSleepScore, generateTreatmentSuggestion, BASELINE_PLAN, TreatmentPlan } from '@/lib/treatment';
@@ -32,6 +34,7 @@ const dayQuestions = [
 export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const { toasts, toast, dismiss } = useToast();
   const [lastSession, setLastSession] = useState<any>(null);
   const [existingCheckin, setExistingCheckin] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -200,7 +203,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
     });
 
     setCheckinResult(null);
-    alert(`✓ Ajuste aplicado. Nueva duración: ${checkinResult.newDuration} min`);
+    toast(`Ajuste aplicado. Nueva duración: ${checkinResult.newDuration} min`, 'success');
   };
 
   const handleSubmit = async () => {
@@ -254,9 +257,10 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
       if (error) throw error;
       setActivePlan(newPlan);
       setSuggestion(null);
-      alert('¡Plan actualizado! Tu próxima sesión usará estos ajustes.');
+      toast('Plan actualizado. Tu próxima sesión usará estos ajustes.', 'success');
     } catch (err) {
-      alert('Error al actualizar el plan.');
+      console.error('[SleepCheckin] Error applying suggestion:', err);
+      toast('Error al actualizar el plan. Intentá de nuevo.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -305,6 +309,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   if (existingCheckin && !isEditing) {
     return (
       <div className="space-y-4">
+        <Toast toasts={toasts} onDismiss={dismiss} />
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           className="bg-emerald-500/5 border border-emerald-500/20 rounded-3xl p-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -400,6 +405,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   // Formulario de check-in
   return (
     <div className="bg-[#4B2C69]/10 border border-white/10 rounded-3xl p-6 space-y-6">
+      <Toast toasts={toasts} onDismiss={dismiss} />
       {isBothMode && <ModeTabs />}
       
       <div className="flex items-center gap-2 border-b border-white/5 pb-4">

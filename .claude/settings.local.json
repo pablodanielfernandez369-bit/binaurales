@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/Users/USER/OneDrive/Documentos/binaurales log --oneline)",
+      "Bash(grep -r \"eval\\\\|dangerouslySetInnerHTML\\\\|innerHTML\\\\|\\\\${\\\\|exec\" /c/Users/USER/OneDrive/Documentos/binaurales/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

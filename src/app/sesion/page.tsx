@@ -1,12 +1,13 @@
 'use client';
-// Version: 1.1.0 - Adaptive Multi-Wave Support
 
 import { useEffect, useState, useRef, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Play, Pause, Square, Wind, Volume2, Brain, Moon, Sun } from 'lucide-react';
+import { Play, Pause, Square, Wind, Moon, Sun } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import WaveVisualizer from '@/components/WaveVisualizer';
+import { Toast } from '@/components/Toast';
+import { useToast } from '@/hooks/useToast';
 
 function SessionContent() {
   const [profile, setProfile] = useState<any>(null);
@@ -17,7 +18,8 @@ function SessionContent() {
   const [noiseVolume, setNoiseVolume] = useState(0.05);
   const [completed, setCompleted] = useState(false);
   const [showPlanSelector, setShowPlanSelector] = useState(false);
-  
+  const { toasts, toast, dismiss } = useToast();
+
   // Debug Flags
   const searchParams = useSearchParams();
   const isDebugRequested = searchParams.get('debug') === '1';
@@ -89,7 +91,7 @@ function SessionContent() {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError || !user) {
-        alert('No se pudo encontrar el usuario. Asegúrate de estar logueado.');
+        toast('No se pudo encontrar el usuario. Asegurate de estar logueado.', 'error');
         return;
       }
 
@@ -113,13 +115,12 @@ function SessionContent() {
 
       if (saveError) {
         console.error('[Session] Error saving row:', saveError);
-        alert(`No se pudo guardar la sesión en la base de datos.\nError [${saveError.code}]: ${saveError.message}`);
-      } else {
-        console.log('[Session] Saved successfully');
+        toast(`No se pudo guardar la sesión [${saveError.code}]: ${saveError.message}`, 'error');
       }
-    } catch (err: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
       console.error('[Session] Unexpected error:', err);
-      alert(`Ocurrió un error inesperado al finalizar: ${err.message || 'Error desconocido'}`);
+      toast(`Error inesperado al finalizar: ${message}`, 'error');
     }
   }, [profile, noiseVolume, stopAudio]);
 
@@ -427,7 +428,8 @@ function SessionContent() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-6 pb-24 pt-12">
-      <motion.div 
+      <Toast toasts={toasts} onDismiss={dismiss} />
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-lg text-center"
