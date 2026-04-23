@@ -74,13 +74,6 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           .eq('id', user.id)
           .single();
 
-        if (profile?.questionnaire_mode === 'both') {
-          setIsBothMode(true);
-          setQuestionnaireMode('night');
-        } else if (profile?.questionnaire_mode) {
-          setQuestionnaireMode(profile.questionnaire_mode as 'night' | 'day');
-        }
-
         // Última sesión completada
         const { data: sessions } = await supabase
           .from('sessions')
@@ -90,6 +83,14 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           .order('completed_at', { ascending: false })
           .limit(1);
         if (sessions && sessions.length > 0) setLastSession(sessions[0]);
+
+        if (profile?.questionnaire_mode === 'both') {
+          setIsBothMode(true);
+          const lastMode = sessions?.[0]?.protocol_mode === 'day' ? 'day' : 'night';
+          setQuestionnaireMode(lastMode);
+        } else if (profile?.questionnaire_mode) {
+          setQuestionnaireMode(profile.questionnaire_mode as 'night' | 'day');
+        }
 
         // Plan activo
         let initialPlan: TreatmentPlan | null = null;
