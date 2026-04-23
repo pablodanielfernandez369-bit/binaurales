@@ -177,17 +177,9 @@ function SessionContent() {
         }
       }
 
-      if (!currentPlan) {
-        router.push('/');
-        return;
-      }
-
-      // Si no estamos en modo "both" (o si no se activó el selector), seteamos el plan básico
-      if (!profile) {
-        setProfile({ plan: currentPlan });
-      }
-      
-      setTimeLeft(currentPlan.duration_min * 60);
+      if (!currentPlan && !showPlanSelector) { router.push('/'); return; }
+      if (currentPlan && !profile) setProfile({ plan: currentPlan });
+      if (currentPlan) setTimeLeft(currentPlan.duration_min * 60);
       setLoading(false);
     }
     init();
