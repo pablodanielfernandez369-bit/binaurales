@@ -366,6 +366,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
               </button>
             </div>
           </motion.div>
+        )}
         {checkinResult && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
