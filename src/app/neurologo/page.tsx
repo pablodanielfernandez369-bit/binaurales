@@ -64,15 +64,8 @@ export default function NeurologoPage() {
 
   // Separar sesiones por protocolo
   const isBothMode = profile?.questionnaire_mode === 'both';
-  const nightSessions = sessions.filter(s => {
-    if (!isBothMode) return true;
-    const hz = s.frequency_hz;
-    return hz <= 13; // nocturno: Delta, Theta, Alpha/Theta, Alpha
-  });
-  const daySessions = sessions.filter(s => {
-    if (!isBothMode) return false;
-    return s.frequency_hz >= 10 && s.frequency_hz <= 15; // SMR y Alpha diurno
-  });
+  const nightSessions = sessions.filter(s => s.protocol_mode !== 'day');
+  const daySessions = sessions.filter(s => s.protocol_mode === 'day');
 
   if (loading) return (
     <div className="flex min-h-screen items-center justify-center text-[#7B9CFF]">

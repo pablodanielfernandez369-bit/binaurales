@@ -134,7 +134,7 @@ export default function ProfilePage() {
                   <p className="text-[10px] uppercase tracking-widest">Nocturnas</p>
                 </div>
                 <p className="text-xl font-light text-white">
-                  {sessions.filter(s => s.frequency_hz < 13).length}
+                  {sessions.filter(s => s.protocol_mode !== 'day').length}
                 </p>
               </div>
               <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4">
@@ -143,7 +143,7 @@ export default function ProfilePage() {
                   <p className="text-[10px] uppercase tracking-widest">Diurnas</p>
                 </div>
                 <p className="text-xl font-light text-white">
-                  {sessions.filter(s => s.frequency_hz >= 13).length}
+                  {sessions.filter(s => s.protocol_mode === 'day').length}
                 </p>
               </div>
             </div>

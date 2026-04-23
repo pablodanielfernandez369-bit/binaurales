@@ -12,14 +12,6 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.push('/login');
-      } else if (session.user) {
-        checkProfile(session.user);
-      }
-    });
-
     async function checkProfile(authUser: any) {
       setUser(authUser);
       const { data: profile } = await supabase
@@ -27,15 +19,14 @@ export default function Home() {
         .select('plan')
         .eq('id', authUser.id)
         .single();
-
+  
       if (profile?.plan) {
         router.push('/sesion');
       } else {
         setLoading(false);
       }
     }
-
-    // Initial check
+  
     supabase.auth.getUser().then(({ data: { user: authUser } }) => {
       if (!authUser) {
         router.push('/login');
@@ -43,8 +34,6 @@ export default function Home() {
         checkProfile(authUser);
       }
     });
-
-    return () => subscription.unsubscribe();
   }, [router]);
 
   if (loading) {

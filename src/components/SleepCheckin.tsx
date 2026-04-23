@@ -145,7 +145,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
       else if (answers.q3 === 'better') score += 1;
       else if (answers.q3 === 'worse') score -= 2;
       if (answers.q2 === '0') score += 1;
-      if (answers.q1 === 'si') score += 1;
+      if (answers.q1a === 'finished') score += 1;
     } else {
       if (answers.qd1 === 'much_better') score += 2;
       else if (answers.qd1 === 'better') score += 1;

@@ -101,7 +101,10 @@ function SessionContent() {
         frequency_hz: profile.plan.frequency_hz,
         noise_volume: noiseVolume,
         completed: true,
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
+        wave_category: profile.plan.wave_category || 'theta',
+        protocol_mode: (profile.plan.wave_category === 'smr' && profile.questionnaire_mode !== 'night') 
+          ? 'day' : profile.questionnaire_mode === 'day' ? 'day' : 'night'
       };
 
       const { error: saveError } = await supabase
@@ -244,8 +247,17 @@ function SessionContent() {
     oscR.frequency.setValueAtTime(carrierFreq + beatFreq, now); // el diferencial ES el batido
     panR.pan.setValueAtTime(1, now); // 100% derecho
 
+    const defaultGainByCategory: Record<string, number> = {
+      delta: 0.08, theta: 0.12, alpha_theta: 0.10, alpha: 0.11, smr: 0.14
+    };
+    const defaultMasterGainByCategory: Record<string, number> = {
+      delta: 0.40, theta: 0.45, alpha_theta: 0.42, alpha: 0.43, smr: 0.48
+    };
+
+    const oscGainValue = plan.theta_gain || defaultGainByCategory[plan.wave_category] || 0.12;
+    const masterGainValue = plan.master_gain || defaultMasterGainByCategory[plan.wave_category] || 0.45;
+
     if (!muteOsc) {
-      const oscGainValue = plan.theta_gain || 0.12;
       const oscGain = ctx.createGain();
       oscGain.gain.setValueAtTime(oscGainValue, now);
       oscL.connect(panL).connect(oscGain).connect(masterGainRef.current!);
@@ -308,7 +320,7 @@ function SessionContent() {
     const masterGainGain = masterGainRef.current!.gain;
     masterGainGain.cancelScheduledValues(now);
     masterGainGain.setValueAtTime(0, now);
-    masterGainGain.linearRampToValueAtTime(plan.master_gain || 0.45, now + fadeInSec);
+    masterGainGain.linearRampToValueAtTime(masterGainValue, now + fadeInSec);
   };
 
   const togglePlay = useCallback(async () => {
