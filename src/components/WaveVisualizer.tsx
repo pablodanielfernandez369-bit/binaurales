@@ -1,87 +1,55 @@
 'use client';
-
-import { useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 
 interface WaveVisualizerProps {
   isPlaying: boolean;
   frequency: number;
+  waveCategory?: string;
 }
 
-export default function WaveVisualizer({ isPlaying, frequency }: WaveVisualizerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+export default function WaveVisualizer({ isPlaying, frequency, waveCategory }: WaveVisualizerProps) {
+  const [dots, setDots] = useState<number[]>([]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    // Generar 20 puntos para la visualización
+    setDots(Array.from({ length: 20 }, (_, i) => i));
+  }, []);
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  // Duración corregida: mapeo más intuitivo y clínico
+  const duration = Math.max(0.3, Math.min(4, 8 / frequency));
 
-    let animationFrame: number;
-    let offset = 0;
-
-    const render = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      if (isPlaying) {
-        ctx.beginPath();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#7B9CFF';
-
-        const amplitude = 40;
-        const speed = 0.05 + (frequency / 200); // Speed changes slightly with frequency
-
-        for (let x = 0; x < canvas.width; x++) {
-          const y = (canvas.height / 2) + Math.sin(x * 0.02 + offset) * amplitude;
-          if (x === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-
-        ctx.stroke();
-
-        // Second wave for depth (violet)
-        ctx.beginPath();
-        ctx.strokeStyle = '#4B2C69';
-        for (let x = 0; x < canvas.width; x++) {
-          const y = (canvas.height / 2) + Math.sin(x * 0.015 + offset * 0.8 + 1) * (amplitude * 0.7);
-          if (x === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.stroke();
-
-        offset += speed;
-      } else {
-        // Flat line when not playing
-        ctx.beginPath();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(123, 156, 255, 0.2)';
-        ctx.moveTo(0, canvas.height / 2);
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
-      }
-
-      animationFrame = requestAnimationFrame(render);
-    };
-
-    render();
-
-    return () => cancelAnimationFrame(animationFrame);
-  }, [isPlaying, frequency]);
+  // Color por onda
+  const waveColor = {
+    delta: '#6366f1',      // índigo profundo
+    theta: '#7B9CFF',      // azul
+    alpha_theta: '#8b5cf6', // violeta
+    alpha: '#06b6d4',      // cyan
+    smr: '#10b981',        // esmeralda
+  }[waveCategory || 'theta'] || '#7B9CFF';
 
   return (
-    <div className="w-full h-40 flex items-center justify-center overflow-hidden">
-      <canvas 
-        ref={canvasRef} 
-        width={800} 
-        height={160}
-        className="w-full max-w-lg opacity-80"
-      />
+    <div className="flex items-center justify-center gap-1 h-12 w-full max-w-[200px] mx-auto">
+      {dots.map((i) => (
+        <motion.div
+          key={i}
+          className="w-1.5 rounded-full"
+          style={{ background: waveColor }}
+          animate={isPlaying ? {
+            height: [4, 24, 8, 32, 4],
+            opacity: [0.3, 0.8, 0.3, 1, 0.3],
+          } : {
+            height: 4,
+            opacity: 0.2,
+          }}
+          transition={{
+            duration: duration,
+            repeat: Infinity,
+            delay: i * 0.03, // Delay reducido para mayor cohesión
+            ease: "easeInOut"
+          }}
+        />
+      ))}
     </div>
   );
 }

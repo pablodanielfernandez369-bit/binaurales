@@ -49,7 +49,9 @@ function SessionContent() {
       const stopDuration = 0.08; // Slightly longer for safe zero-crossing
       
       // Strict Fade-out sequence
-      const fadeOutDuration = (profile?.plan?.fade_out_ms / 1000) || 0.08;
+      const fadeOutDuration = profile?.plan?.fade_out_ms 
+        ? profile.plan.fade_out_ms / 1000 
+        : 0.5; // 500ms de fade out por defecto
       masterGainRef.current.gain.cancelScheduledValues(now);
       masterGainRef.current.gain.setValueAtTime(masterGainRef.current.gain.value, now);
       masterGainRef.current.gain.linearRampToValueAtTime(0, now + fadeOutDuration);
@@ -208,6 +210,16 @@ function SessionContent() {
   };
 
   const startAudioGraph = async () => {
+    // Limpiar nodos anteriores si existen
+    if (oscRef.current) {
+      try { oscRef.current.l.stop(); oscRef.current.r.stop(); } catch {}
+      oscRef.current = null;
+    }
+    if (noiseNodeRef.current) {
+      try { noiseNodeRef.current.disconnect(); } catch {}
+      noiseNodeRef.current = null;
+    }
+
     const ctx = audioCtxRef.current!;
     const plan = profile.plan || profile; 
     const now = ctx.currentTime;
@@ -216,16 +228,13 @@ function SessionContent() {
     // Delta y Theta usan portadora baja (100Hz) para mayor profundidad
     // Alpha/SMR usan portadora media (200Hz) estándar
     function getCarrierFreq(wave_category: string): number {
-      // La portadora debe estar en el rango 100–200Hz para que el batido
-      // binaural sea perceptible y no cause fatiga auditiva.
-      // El diferencial entre oído izquierdo y derecho ES la frecuencia binaural.
       switch (wave_category) {
-        case 'delta':       return 105; // 105Hz izq | 105 + 2.5Hz der → batido de 2.5Hz
-        case 'theta':       return 110; // 110Hz izq | 110 + 4.5Hz der → batido de 4.5Hz
-        case 'alpha_theta': return 120; // 120Hz izq | 120 + 7.5Hz der → batido de 7.5Hz
-        case 'alpha':       return 150; // 150Hz izq | 150 + 10Hz der  → batido de 10Hz
-        case 'smr':         return 180; // 180Hz izq | 180 + 13Hz der  → batido de 13Hz
-        default:            return 130;
+        case 'delta':       return 200;
+        case 'theta':       return 250;
+        case 'alpha_theta': return 300;
+        case 'alpha':       return 350;
+        case 'smr':         return 400;
+        default:            return 250;
       }
     }
 
@@ -493,7 +502,11 @@ function SessionContent() {
                 <div className="text-6xl font-extralight tracking-tighter text-[#7B9CFF] mb-4">
                   {formatTime(timeLeft)}
                 </div>
-                {showVisualizer && <WaveVisualizer isPlaying={isPlaying} frequency={profile.plan.frequency_hz} />}
+                {showVisualizer && <WaveVisualizer 
+              isPlaying={isPlaying} 
+              frequency={profile.plan.frequency_hz}
+              waveCategory={profile.plan.wave_category}
+            />}
               </div>
 
               <div className="space-y-8 w-full px-8">
