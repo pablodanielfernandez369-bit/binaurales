@@ -228,8 +228,10 @@ export default function ProfilePage() {
               sessions.map((session) => (
                 <div key={session.id} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/5">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#1A1F2E] flex items-center justify-center text-gray-400">
-                      <Moon size={14} />
+                    <div className="w-8 h-8 rounded-full bg-[#1A1F2E] flex items-center justify-center">
+                      {session.protocol_mode === 'day'
+                        ? <Sun size={13} className="text-amber-400" />
+                        : <Moon size={13} className="text-[#7B9CFF]" />}
                     </div>
                     <div>
                       <p className="text-sm text-white">{new Date(session.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
