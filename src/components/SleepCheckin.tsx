@@ -219,7 +219,7 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
       user_id: user.id,
       duration_min: checkinResult.newDuration,
       master_gain: activePlan.master_gain || 0.45,
-      beat_hz: activePlan.beat_hz || 4.5,
+      beat_hz: activePlan.beat_hz || (activePlan as any).frequency_hz || 4.5,
       theta_gain: activePlan.theta_gain || 0.12,
       fade_in_ms: activePlan.fade_in_ms || 150,
       fade_out_ms: activePlan.fade_out_ms || 200,

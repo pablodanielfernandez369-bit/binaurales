@@ -178,6 +178,20 @@ function SessionContent() {
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        try {
+          if (oscRef.current) {
+            try { oscRef.current.l.stop(); oscRef.current.r.stop(); } catch { /* already stopped */ }
+            oscRef.current = null;
+          }
+          if (noiseNodeRef.current) {
+            try { noiseNodeRef.current.disconnect(); } catch { /* already disconnected */ }
+            noiseNodeRef.current = null;
+          }
+          audioCtxRef.current.close();
+          audioCtxRef.current = null;
+        } catch { /* best-effort cleanup */ }
+      }
     };
   }, [router]);
 
