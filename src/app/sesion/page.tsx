@@ -142,7 +142,7 @@ function SessionContent() {
         const plan = activePlans[0];
         currentPlan = {
           duration_min: plan.duration_min,
-          frequency_hz: plan.beat_hz ?? plan.theta_beat_hz, // compatibilidad con campo viejo
+          frequency_hz: plan.frequency_hz ?? plan.beat_hz ?? plan.theta_beat_hz ?? 4.5, // migración progresiva + fallback seguro
           wave_type: plan.wave_type || 'Calibrado',
           wave_category: plan.wave_category || 'theta',
           description: `Plan ajustado tras tu evaluación: ${plan.change_reason || ''}`,
@@ -223,45 +223,42 @@ function SessionContent() {
     // Frecuencia base según categoría de onda
     // Delta y Theta usan portadora baja (100Hz) para mayor profundidad
     // Alpha/SMR usan portadora media (200Hz) estándar
-    const getCarrierFreq = (category: string): number => {
-      switch (category) {
-        case 'delta': return 100;
-        case 'theta': return 150;
-        case 'alpha_theta': return 175;
-        case 'alpha': return 200;
-        case 'smr': return 200;
-        default: return 200;
+    function getCarrierFreq(wave_category: string): number {
+      // La portadora debe estar en el rango 100–200Hz para que el batido
+      // binaural sea perceptible y no cause fatiga auditiva.
+      // El diferencial entre oído izquierdo y derecho ES la frecuencia binaural.
+      switch (wave_category) {
+        case 'delta':       return 105; // 105Hz izq | 105 + 2.5Hz der → batido de 2.5Hz
+        case 'theta':       return 110; // 110Hz izq | 110 + 4.5Hz der → batido de 4.5Hz
+        case 'alpha_theta': return 120; // 120Hz izq | 120 + 7.5Hz der → batido de 7.5Hz
+        case 'alpha':       return 150; // 150Hz izq | 150 + 10Hz der  → batido de 10Hz
+        case 'smr':         return 180; // 180Hz izq | 180 + 13Hz der  → batido de 13Hz
+        default:            return 130;
       }
-    };
+    }
 
-    // Ganancia del oscilador según onda (Delta más suave, SMR más marcado)
-    const getOscGain = (category: string): number => {
-      switch (category) {
-        case 'delta': return 0.08;
-        case 'theta': return 0.12;
-        case 'alpha_theta': return 0.10;
-        case 'alpha': return 0.11;
-        case 'smr': return 0.14;
-        default: return 0.12;
-      }
-    };
+    // Validación defensiva — nunca llegar al oscilador con undefined
+    const beatFreq: number = typeof plan.frequency_hz === 'number' && plan.frequency_hz > 0
+      ? plan.frequency_hz
+      : 4.5; // fallback seguro: Theta Profunda
 
-    const carrierFreq = getCarrierFreq(plan.wave_category);
-    const beatFreq = plan.frequency_hz;
-    const oscGainValue = plan.theta_gain || getOscGain(plan.wave_category);
+    const carrierFreq: number = getCarrierFreq(plan.wave_category);
 
     const oscL = ctx.createOscillator();
     const oscR = ctx.createOscillator();
     const panL = ctx.createStereoPanner();
     const panR = ctx.createStereoPanner();
 
+    oscL.type = 'sine';
     oscL.frequency.setValueAtTime(carrierFreq, now);
-    oscR.frequency.setValueAtTime(carrierFreq + beatFreq, now);
+    panL.pan.setValueAtTime(-1, now); // 100% izquierdo
 
-    panL.pan.setValueAtTime(-1, now);
-    panR.pan.setValueAtTime(1, now);
+    oscR.type = 'sine';
+    oscR.frequency.setValueAtTime(carrierFreq + beatFreq, now); // el diferencial ES el batido
+    panR.pan.setValueAtTime(1, now); // 100% derecho
 
     if (!muteOsc) {
+      const oscGainValue = plan.theta_gain || 0.12;
       const oscGain = ctx.createGain();
       oscGain.gain.setValueAtTime(oscGainValue, now);
       oscL.connect(panL).connect(oscGain).connect(masterGainRef.current!);
