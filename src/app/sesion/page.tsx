@@ -130,44 +130,37 @@ function SessionContent() {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) { router.push('/login'); return; }
 
-      // Primero verificar modo both — tiene prioridad visual
-      const { data: profileData } = await supabase
-        .from('user_profile')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
+      const [{ data: profileData }, { data: activePlans }] = await Promise.all([
+        supabase.from('user_profile').select('*').eq('id', authUser.id).single(),
+        supabase.from('treatment_plans').select('*').eq('user_id', authUser.id).eq('is_active', true).limit(1),
+      ]);
+
+      const normalizePlanLocal = (plan: any) => ({
+        ...plan,
+        frequency_hz: plan.frequency_hz ?? plan.beat_hz ?? plan.theta_beat_hz ?? 4.5,
+        wave_type: plan.wave_type || 'Calibrado',
+        wave_category: plan.wave_category || 'theta',
+      });
+
+      const activePlan = activePlans?.[0] ? normalizePlanLocal(activePlans[0]) : null;
 
       if (profileData?.questionnaire_mode === 'both' && profileData?.plan_day) {
-        setProfile(profileData);
-        setTimeLeft(profileData.plan.duration_min * 60);
+        const nightPlan = activePlan?.protocol_mode !== 'day'
+          ? (activePlan || profileData.plan)
+          : profileData.plan;
+        const dayPlan = activePlan?.protocol_mode === 'day'
+          ? activePlan
+          : profileData.plan_day;
+        setProfile({ ...profileData, plan: nightPlan, plan_day: dayPlan });
+        setTimeLeft(nightPlan.duration_min * 60);
         setShowPlanSelector(true);
         setLoading(false);
         return;
       }
 
-      // Si hay plan calibrado activo, usarlo
-      const { data: activePlans } = await supabase
-        .from('treatment_plans')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .eq('is_active', true)
-        .limit(1);
-
-      let currentPlan: any = null;
-      if (activePlans && activePlans.length > 0) {
-        const plan = activePlans[0];
-        currentPlan = {
-          ...plan,
-          frequency_hz: plan.frequency_hz ?? plan.beat_hz ?? plan.theta_beat_hz ?? 4.5,
-          wave_type: plan.wave_type || 'Calibrado',
-          wave_category: plan.wave_category || 'theta'
-        };
-      } else if (profileData?.plan) {
-        currentPlan = {
-          ...profileData.plan,
-          wave_category: profileData.plan.wave_category || 'theta'
-        };
-      }
+      const currentPlan = activePlan ?? (profileData?.plan
+        ? { ...profileData.plan, wave_category: profileData.plan.wave_category || 'theta' }
+        : null);
 
       if (!currentPlan) { router.push('/'); return; }
       setProfile({ plan: currentPlan });
