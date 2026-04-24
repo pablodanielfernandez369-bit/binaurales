@@ -1,4 +1,5 @@
 'use client';
+// SleepCheckin v2.0 — sistema único de ajuste, sin lógica duplicada
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { motion } from 'framer-motion';
@@ -7,13 +8,20 @@ import { Toast } from '@/components/Toast';
 import { useToast } from '@/hooks/useToast';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { calculateSleepScore, generateTreatmentSuggestion, BASELINE_PLAN, TreatmentPlan } from '@/lib/treatment';
+import {
+  normalizePlan,
+  calculateNightScore,
+  calculateDayScore,
+  evaluateAdjustment,
+  BASELINE_PLAN,
+  TreatmentPlan,
+  AdjustmentResult,
+} from '@/lib/treatment';
 
 interface SleepCheckinProps {
   onComplete?: () => void;
 }
 
-// Preguntas modo NOCHE
 const nightQuestions = [
   { id: 'q_bedtime', label: '¿A qué hora te fuiste a dormir?', options: [{ id: 'before_22', label: 'Antes de las 22hs' }, { id: '22_23', label: 'Entre 22 y 23hs' }, { id: '23_00', label: 'Entre 23 y 00hs' }, { id: 'after_00', label: 'Después de las 00hs' }] },
   { id: 'q_total_hours', label: '¿Cuántas horas dormiste en total?', options: [{ id: 'less_5', label: 'Menos de 5hs' }, { id: '5_6', label: '5 a 6hs' }, { id: '6_7', label: '6 a 7hs' }, { id: '7_8', label: '7 a 8hs' }, { id: 'more_8', label: 'Más de 8hs' }] },
@@ -24,7 +32,6 @@ const nightQuestions = [
   { id: 'q3', label: '¿Cómo dormiste comparado con antes del tratamiento?', options: [{ id: 'much_better', label: 'Mucho mejor' }, { id: 'better', label: 'Mejor' }, { id: 'same', label: 'Igual' }, { id: 'worse', label: 'Peor' }] },
 ];
 
-// Preguntas modo DÍA
 const dayQuestions = [
   { id: 'qd_energy', label: '¿Cómo está tu energía ahora del 1 al 5?', options: [{ id: '1', label: '1 — Sin energía' }, { id: '2', label: '2 — Baja' }, { id: '3', label: '3 — Normal' }, { id: '4', label: '4 — Buena' }, { id: '5', label: '5 — Alta' }] },
   { id: 'qd1', label: '¿Cómo te sentís comparado con antes de la sesión?', options: [{ id: 'much_better', label: 'Mucho más tranquilo' }, { id: 'better', label: 'Algo mejor' }, { id: 'same', label: 'Igual' }, { id: 'worse', label: 'Peor' }] },
@@ -35,27 +42,33 @@ const dayQuestions = [
 ];
 
 export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
-  const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const { toasts, toast, dismiss } = useToast();
-  const [lastSession, setLastSession] = useState<any>(null);
-  const [existingCheckin, setExistingCheckin] = useState<any>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [activePlan, setActivePlan] = useState<TreatmentPlan | null>(null);
+  const [loading, setLoading]                     = useState(true);
+  const [currentUser, setCurrentUser]             = useState<any>(null);
+  const { toasts, toast, dismiss }                = useToast();
+  const [lastSession, setLastSession]             = useState<any>(null);
+  const [existingCheckin, setExistingCheckin]     = useState<any>(null);
+  const [isEditing, setIsEditing]                 = useState(false);
+  const [submitting, setSubmitting]               = useState(false);
+  const [activePlan, setActivePlan]               = useState<TreatmentPlan | null>(null);
   const [questionnaireMode, setQuestionnaireMode] = useState<'night' | 'day'>('night');
-  const [isBothMode, setIsBothMode] = useState(false);
-  const [suggestion, setSuggestion] = useState<{ suggestedPlan: TreatmentPlan; reason: string; changedField: string } | null>(null);
-  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
-  const [answers, setAnswers] = useState<any>({});
-  const [checkinResult, setCheckinResult] = useState<{
-    message: string;
-    action: 'maintain' | 'adjust';
-    adjustment?: string;
-    newDuration?: number;
-  } | null>(null);
+  const [isBothMode, setIsBothMode]               = useState(false);
+  const [answers, setAnswers]                     = useState<Record<string, string>>({});
+  const [adjustmentResult, setAdjustmentResult]   = useState<AdjustmentResult | null>(null);
 
-  const getARDate = () => Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+  const getARDate = () =>
+    Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+
+  const loadCheckinForMode = async (userId: string, mode: 'night' | 'day') => {
+    const today = getARDate();
+    const { data } = await supabase
+      .from('daily_checkins')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('checkin_date', today)
+      .eq('checkin_mode', mode)
+      .limit(1);
+    return data?.[0] ?? null;
+  };
 
   useEffect(() => {
     async function initCheckin() {
@@ -65,16 +78,12 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
         if (!user) { setLoading(false); return; }
         setCurrentUser(user);
 
-        const today = getARDate();
-
-        // Obtener modo del cuestionario del perfil
         const { data: profile } = await supabase
           .from('user_profile')
-          .select('plan, questionnaire_mode')
+          .select('plan, plan_day, questionnaire_mode')
           .eq('id', user.id)
           .single();
 
-        // Última sesión completada
         const { data: sessions } = await supabase
           .from('sessions')
           .select('*')
@@ -82,18 +91,18 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           .eq('completed', true)
           .order('completed_at', { ascending: false })
           .limit(1);
-        if (sessions && sessions.length > 0) setLastSession(sessions[0]);
+        if (sessions?.[0]) setLastSession(sessions[0]);
 
+        let mode: 'night' | 'day' = 'night';
         if (profile?.questionnaire_mode === 'both') {
           setIsBothMode(true);
-          const lastMode = sessions?.[0]?.protocol_mode === 'day' ? 'day' : 'night';
-          setQuestionnaireMode(lastMode);
-        } else if (profile?.questionnaire_mode) {
-          setQuestionnaireMode(profile.questionnaire_mode as 'night' | 'day');
+          mode = sessions?.[0]?.protocol_mode === 'day' ? 'day' : 'night';
+        } else if (profile?.questionnaire_mode === 'day') {
+          mode = 'day';
         }
+        setQuestionnaireMode(mode);
 
-        // Plan activo
-        let initialPlan: TreatmentPlan | null = null;
+        let plan: TreatmentPlan = BASELINE_PLAN;
         const { data: activePlans } = await supabase
           .from('treatment_plans')
           .select('*')
@@ -101,43 +110,21 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
           .eq('is_active', true)
           .limit(1);
 
-        if (activePlans && activePlans.length > 0) {
-          initialPlan = activePlans[0];
+        if (activePlans?.[0]) {
+          plan = normalizePlan(activePlans[0]);
         } else if (profile?.plan) {
-          initialPlan = {
-            duration_min: profile.plan.duration_min || BASELINE_PLAN.duration_min,
-            master_gain: profile.plan.master_gain || BASELINE_PLAN.master_gain,
-            beat_hz: profile.plan.frequency_hz || BASELINE_PLAN.beat_hz,
-            theta_gain: profile.plan.theta_gain || BASELINE_PLAN.theta_gain,
-            fade_in_ms: profile.plan.fade_in_ms || BASELINE_PLAN.fade_in_ms,
-            fade_out_ms: profile.plan.fade_out_ms || BASELINE_PLAN.fade_out_ms,
-          };
-        } else {
-          initialPlan = BASELINE_PLAN;
+          const rawPlan = (mode === 'day' && profile.plan_day) ? profile.plan_day : profile.plan;
+          plan = normalizePlan(rawPlan);
         }
-        setActivePlan(initialPlan);
+        setActivePlan(plan);
 
-        // Check-in de hoy filtrado por modo
-        const { data: checkins } = await supabase
-          .from('daily_checkins')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('checkin_date', today)
-          .eq('checkin_mode', profile?.questionnaire_mode === 'both' ? 'night' : (profile?.questionnaire_mode || 'night'))
-          .limit(1);
-
-        if (checkins && checkins.length > 0) {
-          setExistingCheckin(checkins[0]);
-          setAnswers(checkins[0].answers || {});
-          setSuggestionDismissed(checkins[0].suggestion_dismissed || false);
-          if (!checkins[0].suggestion_dismissed && initialPlan) {
-            const score = calculateSleepScore(checkins[0].answers);
-            const sug = generateTreatmentSuggestion(initialPlan, score);
-            setSuggestion(sug);
-          }
+        const checkin = await loadCheckinForMode(user.id, mode);
+        if (checkin) {
+          setExistingCheckin(checkin);
+          setAnswers(checkin.answers || {});
         }
       } catch (err) {
-        console.error('[SleepCheckin] Error:', err);
+        console.error('[SleepCheckin] Error init:', err);
       } finally {
         setLoading(false);
       }
@@ -145,163 +132,87 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
     initCheckin();
   }, []);
 
-  function calculateCheckinScore(answers: any, mode: string): number {
-    let score = 0;
-    if (mode === 'night') {
-      if (answers.q3 === 'much_better') score += 2;
-      else if (answers.q3 === 'better') score += 1;
-      else if (answers.q3 === 'worse') score -= 2;
-
-      if (answers.q2 === '0') score += 2;
-      else if (answers.q2 === '1') score += 1;
-      else if (answers.q2 === '4+') score -= 2;
-
-      if (answers.q_quality_score === '5') score += 2;
-      else if (answers.q_quality_score === '4') score += 1;
-      else if (answers.q_quality_score === '2') score -= 1;
-      else if (answers.q_quality_score === '1') score -= 2;
-
-      if (answers.q_total_hours === '7_8' || answers.q_total_hours === 'more_8') score += 1;
-      else if (answers.q_total_hours === 'less_5') score -= 1;
-
-      if (answers.q1b === 'yes') score += 1;
-      if (answers.q_dream === 'yes_vivid') score += 1;
-    } else {
-      if (answers.qd1 === 'much_better') score += 2;
-      else if (answers.qd1 === 'better') score += 1;
-      else if (answers.qd1 === 'worse') score -= 2;
-
-      if (answers.qd2 === 'yes') score += 1;
-      else if (answers.qd2 === 'no') score -= 1;
-
-      if (answers.qd3 === 'low') score += 1;
-      else if (answers.qd3 === 'high') score -= 1;
-
-      if (answers.qd_energy === '5' || answers.qd_energy === '4') score += 1;
-      else if (answers.qd_energy === '1') score -= 1;
-
-      if (answers.qd_focus === 'yes') score += 1;
-      else if (answers.qd_focus === 'no') score -= 1;
-
-      if (answers.q3 === 'much_better') score += 1;
-      else if (answers.q3 === 'worse') score -= 1;
+  const switchMode = async (mode: 'night' | 'day') => {
+    if (!currentUser) return;
+    setQuestionnaireMode(mode);
+    setAnswers({});
+    setExistingCheckin(null);
+    setAdjustmentResult(null);
+    const checkin = await loadCheckinForMode(currentUser.id, mode);
+    if (checkin) {
+      setExistingCheckin(checkin);
+      setAnswers(checkin.answers || {});
     }
-    return score;
-  }
-
-  function generateRecommendation(score: number, currentDuration: number) {
-    if (score >= 3) {
-      const newDuration = Math.min(45, currentDuration + 5);
-      return {
-        message: 'Excelente respuesta al tratamiento.',
-        action: 'adjust' as const,
-        adjustment: `Vamos a aumentar la duración de ${currentDuration} a ${newDuration} minutos.`,
-        newDuration
-      };
-    } else if (score <= -1) {
-      const newDuration = Math.max(10, currentDuration - 5);
-      return {
-        message: 'Tu cuerpo necesita un ajuste.',
-        action: 'adjust' as const,
-        adjustment: `Reduciremos la duración de ${currentDuration} a ${newDuration} minutos.`,
-        newDuration
-      };
-    }
-    return { message: 'Seguimos con el mismo protocolo. Tu progreso es estable.', action: 'maintain' as const };
-  }
-
-  const applyAdjustment = async () => {
-    if (!checkinResult?.newDuration) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !activePlan) return;
-
-    await supabase.from('treatment_plans').update({ is_active: false }).eq('user_id', user.id);
-    await supabase.from('treatment_plans').insert({
-      user_id: user.id,
-      duration_min: checkinResult.newDuration,
-      master_gain: activePlan.master_gain || 0.45,
-      beat_hz: activePlan.beat_hz || (activePlan as any).frequency_hz || 4.5,
-      theta_gain: activePlan.theta_gain || 0.12,
-      fade_in_ms: activePlan.fade_in_ms || 150,
-      fade_out_ms: activePlan.fade_out_ms || 200,
-      wave_category: activePlan.wave_category,
-      wave_type: activePlan.wave_type,
-      is_active: true,
-      change_reason: checkinResult.newDuration > (activePlan.duration_min || 20) 
-        ? 'Progresión automática post check-in' 
-        : 'Reducción automática post check-in',
-      changed_field: 'duration_min'
-    });
-
-    setCheckinResult(null);
-    toast(`Ajuste aplicado. Nueva duración: ${checkinResult.newDuration} min`, 'success');
   };
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const today = Intl.DateTimeFormat('en-CA', { 
-      timeZone: 'America/Argentina/Buenos_Aires' 
-    }).format(new Date());
-
-    const { data } = await supabase
-      .from('daily_checkins')
-      .upsert({
-        user_id: user.id,
-        checkin_date: today,
-        answers,
-        checkin_mode: questionnaireMode,
-        session_id: lastSession?.id || null,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,checkin_date,checkin_mode' })
-      .select().single();
-
-    if (data) {
-      setExistingCheckin(data);
-      setIsEditing(false);
-      const score = calculateCheckinScore(answers, questionnaireMode);
-      const currentDuration = activePlan?.duration_min || 20;
-      const recommendation = generateRecommendation(score, currentDuration);
-      setCheckinResult(recommendation);
-    }
-    setSubmitting(false);
-  };
-
-  const handleApplySuggestion = async () => {
-    if (!currentUser || !suggestion) return;
-    setSubmitting(true);
     try {
-      await supabase.from('treatment_plans').update({ is_active: false }).eq('user_id', currentUser.id);
-      const { data: newPlan, error } = await supabase
-        .from('treatment_plans')
-        .insert({
-          user_id: currentUser.id,
-          ...suggestion.suggestedPlan,
-          is_active: true,
-          source_checkin_id: existingCheckin.id,
-          change_reason: `auto:score=${calculateSleepScore(existingCheckin.answers)}`,
-          changed_field: suggestion.changedField
-        })
-        .select().single();
-      if (error) throw error;
-      setActivePlan(newPlan);
-      setSuggestion(null);
-      toast('Plan actualizado. Tu próxima sesión usará estos ajustes.', 'success');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !activePlan) return;
+      const today = getARDate();
+      const { data } = await supabase
+        .from('daily_checkins')
+        .upsert(
+          { user_id: user.id, checkin_date: today, answers, checkin_mode: questionnaireMode, session_id: lastSession?.id || null, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id,checkin_date,checkin_mode' }
+        )
+        .select()
+        .single();
+      if (data) {
+        setExistingCheckin(data);
+        setIsEditing(false);
+        const score = questionnaireMode === 'night'
+          ? calculateNightScore(answers)
+          : calculateDayScore(answers);
+        const result = evaluateAdjustment(activePlan, score, questionnaireMode);
+        setAdjustmentResult(result);
+        onComplete?.();
+      }
     } catch (err) {
-      console.error('[SleepCheckin] Error applying suggestion:', err);
-      toast('Error al actualizar el plan. Intentá de nuevo.', 'error');
+      console.error('[SleepCheckin] Error submit:', err);
+      toast('Error al guardar. Intentá de nuevo.', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDismissSuggestion = async () => {
-    if (!existingCheckin) return;
-    await supabase.from('daily_checkins').update({ suggestion_dismissed: true }).eq('id', existingCheckin.id);
-    setSuggestionDismissed(true);
-    setSuggestion(null);
+  const handleApplyAdjustment = async () => {
+    if (!currentUser || !activePlan || adjustmentResult?.action !== 'adjust') return;
+    setSubmitting(true);
+    try {
+      const { suggestedPlan, changedField } = adjustmentResult;
+      await supabase.from('treatment_plans').update({ is_active: false }).eq('user_id', currentUser.id);
+      const { data: newPlan, error } = await supabase
+        .from('treatment_plans')
+        .insert({
+          user_id: currentUser.id,
+          duration_min: suggestedPlan.duration_min,
+          master_gain: suggestedPlan.master_gain,
+          frequency_hz: suggestedPlan.frequency_hz,
+          theta_gain: suggestedPlan.theta_gain,
+          fade_in_ms: suggestedPlan.fade_in_ms,
+          fade_out_ms: suggestedPlan.fade_out_ms,
+          wave_category: suggestedPlan.wave_category,
+          wave_type: suggestedPlan.wave_type,
+          is_active: true,
+          source_checkin_id: existingCheckin?.id,
+          change_reason: adjustmentResult.reason,
+          changed_field: changedField,
+          protocol_mode: questionnaireMode,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      setActivePlan(normalizePlan(newPlan));
+      setAdjustmentResult(null);
+      toast('Ajuste aplicado. Tu próxima sesión usará el nuevo protocolo.', 'success');
+    } catch (err) {
+      console.error('[SleepCheckin] Error apply:', err);
+      toast('Error al aplicar el ajuste. Intentá de nuevo.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) return null;
@@ -316,59 +227,25 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
 
   const questions = questionnaireMode === 'night' ? nightQuestions : dayQuestions;
   const modeLabel = questionnaireMode === 'night' ? 'Nocturno' : 'Diurno';
-  const ModeIcon = questionnaireMode === 'night' ? Moon : Sun;
+  const ModeIcon  = questionnaireMode === 'night' ? Moon : Sun;
   const modeColor = questionnaireMode === 'night' ? 'text-[#7B9CFF]' : 'text-amber-400';
 
   const ModeTabs = () => (
     <div className="flex gap-2 p-1 bg-white/5 rounded-2xl mb-4">
-      <button
-        onClick={async () => {
-          setQuestionnaireMode('night');
-          setAnswers({});
-          setExistingCheckin(null);
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
-          const today = getARDate();
-          const { data } = await supabase
-            .from('daily_checkins').select('*')
-            .eq('user_id', user.id)
-            .eq('checkin_date', today)
-            .eq('checkin_mode', 'night')
-            .limit(1);
-          if (data?.[0]) { setExistingCheckin(data[0]); setAnswers(data[0].answers || {}); }
-        }}
-        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'night' ? 'bg-[#7B9CFF] text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}
-      >
+      <button onClick={() => switchMode('night')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'night' ? 'bg-[#7B9CFF] text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}>
         <Moon size={14} /> Noche
       </button>
-      <button
-        onClick={async () => {
-          setQuestionnaireMode('day');
-          setAnswers({});
-          setExistingCheckin(null);
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
-          const today = getARDate();
-          const { data } = await supabase
-            .from('daily_checkins').select('*')
-            .eq('user_id', user.id)
-            .eq('checkin_date', today)
-            .eq('checkin_mode', 'day')
-            .limit(1);
-          if (data?.[0]) { setExistingCheckin(data[0]); setAnswers(data[0].answers || {}); }
-        }}
-        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'day' ? 'bg-amber-400 text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}
-      >
+      <button onClick={() => switchMode('day')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs transition-all ${questionnaireMode === 'day' ? 'bg-amber-400 text-[#0A0E1A] font-medium' : 'text-gray-500 hover:text-gray-300'}`}>
         <Sun size={14} /> Día
       </button>
     </div>
   );
 
-  // Check-in ya completado
   if (existingCheckin && !isEditing) {
     return (
       <div className="space-y-4">
         <Toast toasts={toasts} onDismiss={dismiss} />
+        {isBothMode && <ModeTabs />}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           className="bg-emerald-500/5 border border-emerald-500/20 rounded-3xl p-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -383,77 +260,58 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                {lastSession?.completed_at 
-                  ? format(new Date(lastSession.completed_at), "d 'de' MMMM", { locale: es }) 
-                  : 'Hoy'}
+                {lastSession?.completed_at ? format(new Date(lastSession.completed_at), "d 'de' MMMM", { locale: es }) : 'Hoy'}
               </p>
             </div>
           </div>
-          <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white text-xs hover:bg-white/10 transition-colors">
+          <button onClick={() => { setIsEditing(true); setAdjustmentResult(null); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-white text-xs hover:bg-white/10 transition-colors">
             <Edit3 size={14} /> Editar
           </button>
         </motion.div>
 
-        {suggestion && !suggestionDismissed && (
+        {adjustmentResult && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="bg-[#7B9CFF]/10 border border-[#7B9CFF]/30 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center gap-2 text-[#7B9CFF]">
+            className={`rounded-2xl p-5 space-y-4 border ${adjustmentResult.action === 'adjust' ? 'bg-[#7B9CFF]/10 border-[#7B9CFF]/30' : 'bg-emerald-500/5 border-emerald-500/20'}`}>
+            <div className={`flex items-center gap-2 ${adjustmentResult.action === 'adjust' ? 'text-[#7B9CFF]' : 'text-emerald-400'}`}>
               <Sparkles size={18} />
-              <h4 className="text-sm font-medium">Ajuste sugerido para la próxima sesión</h4>
+              <h4 className="text-sm font-medium">
+                {adjustmentResult.action === 'adjust' ? 'Ajuste sugerido' : 'Protocolo estable'}
+              </h4>
             </div>
-            <p className="text-xs text-blue-100/70 italic">"{suggestion.reason}"</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Actual</p>
-                <p className="text-sm text-gray-300">
-                  {suggestion.changedField === 'duration_min' && `${activePlan?.duration_min} min`}
-                  {suggestion.changedField === 'master_gain' && `Vol. ${activePlan?.master_gain}`}
-                  {suggestion.changedField === 'theta_gain' && `Intensidad ${activePlan?.theta_gain}`}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#7B9CFF] mb-1">Sugerencia</p>
-                <p className="text-sm font-medium text-white flex items-center gap-1">
-                  <ArrowRight size={14} className="text-[#7B9CFF]" />
-                  {suggestion.changedField === 'duration_min' && `${suggestion.suggestedPlan.duration_min} min`}
-                  {suggestion.changedField === 'master_gain' && `Vol. ${suggestion.suggestedPlan.master_gain}`}
-                  {suggestion.changedField === 'theta_gain' && `Intensidad ${suggestion.suggestedPlan.theta_gain}`}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button onClick={handleApplySuggestion} disabled={submitting}
-                className="flex-1 bg-[#7B9CFF] text-[#0A0E1A] py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
-                <CheckSquare size={14} /> Aplicar
-              </button>
-              <button onClick={handleDismissSuggestion}
-                className="px-4 py-2 bg-white/5 text-gray-400 rounded-xl text-xs hover:bg-white/10">
-                Mantener actual
-              </button>
-            </div>
-          </motion.div>
-        )}
-        {checkinResult && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`p-5 rounded-2xl border space-y-3 mt-4 ${
-              checkinResult.action === 'adjust'
-                ? 'bg-[#7B9CFF]/10 border-[#7B9CFF]/30'
-                : 'bg-emerald-500/5 border-emerald-500/20'
-            }`}
-          >
-            <p className="text-white text-sm font-medium">{checkinResult.message}</p>
-            {checkinResult.adjustment && (
-              <p className="text-gray-400 text-xs leading-relaxed">{checkinResult.adjustment}</p>
-            )}
-            {checkinResult.action === 'adjust' && (
-              <button
-                onClick={applyAdjustment}
-                className="w-full py-3 bg-[#7B9CFF] text-[#0A0E1A] rounded-xl text-sm font-medium"
-              >
-                Aplicar ajuste automático
-              </button>
+            <p className="text-xs text-blue-100/70 italic">"{adjustmentResult.reason}"</p>
+            {adjustmentResult.action === 'adjust' && activePlan && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Actual</p>
+                    <p className="text-sm text-gray-300">
+                      {adjustmentResult.changedField === 'duration_min' && `${activePlan.duration_min} min`}
+                      {adjustmentResult.changedField === 'master_gain' && `Vol. ${activePlan.master_gain}`}
+                      {adjustmentResult.changedField === 'theta_gain' && `Intensidad ${adjustmentResult.suggestedPlan.theta_gain}`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[#7B9CFF] mb-1">Nuevo</p>
+                    <p className="text-sm font-medium text-white flex items-center gap-1">
+                      <ArrowRight size={14} className="text-[#7B9CFF]" />
+                      {adjustmentResult.changedField === 'duration_min' && `${adjustmentResult.suggestedPlan.duration_min} min`}
+                      {adjustmentResult.changedField === 'master_gain' && `Vol. ${adjustmentResult.suggestedPlan.master_gain}`}
+                      {adjustmentResult.changedField === 'theta_gain' && `Intensidad ${adjustmentResult.suggestedPlan.theta_gain}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleApplyAdjustment} disabled={submitting}
+                    className="flex-1 bg-[#7B9CFF] text-[#0A0E1A] py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-70">
+                    <CheckSquare size={14} /> Aplicar
+                  </button>
+                  <button onClick={() => setAdjustmentResult(null)}
+                    className="px-4 py-2 bg-white/5 text-gray-400 rounded-xl text-xs hover:bg-white/10">
+                    Mantener actual
+                  </button>
+                </div>
+              </>
             )}
           </motion.div>
         )}
@@ -461,46 +319,29 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
     );
   }
 
-  // Formulario de check-in
   return (
     <div className="bg-[#4B2C69]/10 border border-white/10 rounded-3xl p-6 space-y-6">
       <Toast toasts={toasts} onDismiss={dismiss} />
       {isBothMode && <ModeTabs />}
-      
       <div className="flex items-center gap-2 border-b border-white/5 pb-4">
         <ModeIcon size={16} className={modeColor} />
         <h2 className="text-base font-light text-white">Seguimiento {modeLabel}</h2>
         <span className="text-xs text-gray-500 ml-auto">¿Cómo fue tu sesión?</span>
       </div>
-
       <div className="space-y-6">
         {questions.map((q) => (
-          <Question
-            key={q.id}
-            label={q.label}
-            value={answers[q.id]}
-            onChange={(val: string) => setAnswers((prev: any) => ({ ...prev, [q.id]: val }))}
-            options={q.options}
-          />
+          <Question key={q.id} label={q.label} value={answers[q.id]} onChange={(val: string) => setAnswers((prev) => ({ ...prev, [q.id]: val }))} options={q.options} mode={questionnaireMode} />
         ))}
-
         <div>
           <p className="text-sm text-gray-400 font-light mb-2">Nota opcional</p>
-          <textarea
-            value={answers.q4 || ''}
-            onChange={(e) => setAnswers((prev: any) => ({ ...prev, q4: e.target.value }))}
+          <textarea value={answers.q4 || ''} onChange={(e) => setAnswers((prev) => ({ ...prev, q4: e.target.value }))}
             placeholder="¿Algo que quieras registrar?"
-            className="w-full bg-[#0A0E1A] border border-white/5 rounded-2xl p-4 text-sm text-gray-300 focus:outline-none focus:border-[#7B9CFF]/50 resize-none"
-            rows={2}
-          />
+            className="w-full bg-[#0A0E1A] border border-white/5 rounded-2xl p-4 text-sm text-gray-300 focus:outline-none focus:border-[#7B9CFF]/50 resize-none" rows={2} />
         </div>
       </div>
-
       <div className="flex justify-end gap-3 pt-2 border-t border-white/5">
         {isEditing && (
-          <button onClick={() => setIsEditing(false)} className="text-sm text-gray-500 hover:text-white transition-colors">
-            Cancelar
-          </button>
+          <button onClick={() => setIsEditing(false)} className="text-sm text-gray-500 hover:text-white transition-colors">Cancelar</button>
         )}
         <button onClick={handleSubmit} disabled={submitting}
           className="px-8 py-3 rounded-2xl bg-[#7B9CFF] text-[#0A0E1A] font-medium text-sm shadow-xl shadow-[#7B9CFF]/20 disabled:opacity-70">
@@ -511,14 +352,20 @@ export default function SleepCheckin({ onComplete }: SleepCheckinProps) {
   );
 }
 
-function Question({ label, value, onChange, options }: any) {
+function Question({ label, value, onChange, options, mode }: {
+  label: string; value: string; onChange: (val: string) => void;
+  options: { id: string; label: string }[]; mode: 'night' | 'day';
+}) {
+  const selectedClass = mode === 'night'
+    ? 'bg-[#7B9CFF] border-[#7B9CFF] text-[#0A0E1A] font-medium'
+    : 'bg-amber-400 border-amber-400 text-[#0A0E1A] font-medium';
   return (
     <div className="space-y-2">
       <p className="text-sm text-gray-300 font-light">{label}</p>
       <div className="flex flex-wrap gap-2">
-        {options.map((opt: any) => (
+        {options.map((opt) => (
           <button key={opt.id} onClick={() => onChange(opt.id)}
-            className={`px-4 py-2 rounded-xl text-xs transition-all border ${value === opt.id ? 'bg-[#7B9CFF] border-[#7B9CFF] text-[#0A0E1A] font-medium' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}>
+            className={`px-4 py-2 rounded-xl text-xs transition-all border ${value === opt.id ? selectedClass : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}>
             {opt.label}
           </button>
         ))}
