@@ -41,7 +41,7 @@ export const BASELINE_PLAN: TreatmentPlan = {
 export function normalizePlan(raw: any): TreatmentPlan {
   return {
     ...raw,
-    frequency_hz: raw.frequency_hz ?? raw.beat_hz ?? BASELINE_PLAN.frequency_hz,
+    frequency_hz: raw.frequency_hz ?? raw.beat_hz ?? raw.theta_beat_hz ?? BASELINE_PLAN.frequency_hz,
   };
 }
 
